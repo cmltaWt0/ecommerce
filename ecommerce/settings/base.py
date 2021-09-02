@@ -825,3 +825,10 @@ AWIN_ADVERTISER_ID = None
 ################# Settings for brand logos. #################
 LOGO_URL = None
 FAVICON_URL = None
+
+# s3 files for email-template, code management credentials
+AWS_EMAIL_TEMPLATE_BUCKET_NAME = ''
+AWS_EMAIL_TEMPLATE_ACCESS_KEY_ID = ''
+AWS_EMAIL_TEMPLATE_SECRET_ACCESS_KEY = ''
+AWS_EMAIL_TEMPLATE_REGION = ''
+

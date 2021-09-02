@@ -1,7 +1,7 @@
-
 import datetime
 import logging
 import re
+import boto3
 
 from dateutil.relativedelta import relativedelta
 from django.conf import settings
@@ -9,6 +9,8 @@ from django.contrib.contenttypes.fields import GenericForeignKey
 from django.contrib.contenttypes.models import ContentType
 from django.core.exceptions import ObjectDoesNotExist
 from django.db import models
+from django.db.models.signals import post_delete
+from django.dispatch import receiver
 from django.utils.translation import ugettext_lazy as _
 from django_extensions.db.models import TimeStampedModel
 from edx_django_utils.cache import TieredCache
@@ -46,7 +48,7 @@ OFFER_PRIORITY_ENTERPRISE = 10
 OFFER_PRIORITY_VOUCHER = 20
 OFFER_PRIORITY_MANUAL_ORDER = 100
 LIMIT = models.Q(app_label='offer', model='offerassignmentemailtemplates') | \
-    models.Q(app_label='offer', model='codeassignmentnudgeemailtemplates')
+        models.Q(app_label='offer', model='codeassignmentnudgeemailtemplates')
 
 logger = logging.getLogger(__name__)
 
@@ -81,8 +83,8 @@ class Benefit(AbstractBenefit):
         return [
             line for line in lines
             if (line.product.is_seat_product or line.product.is_course_entitlement_product) and
-            hasattr(line.product.attr, 'certificate_type') and
-            line.product.attr.certificate_type.lower() in applicable_range.course_seat_types
+               hasattr(line.product.attr, 'certificate_type') and
+               line.product.attr.certificate_type.lower() in applicable_range.course_seat_types
         ]
 
     def _identify_uncached_product_identifiers(self, lines, domain, partner_code, query):
@@ -507,7 +509,7 @@ class Range(AbstractRange):
 
         elif self.catalog:
             contains_product = (
-                product.id in self.catalog.stock_records.values_list('product', flat=True) or contains_product
+                    product.id in self.catalog.stock_records.values_list('product', flat=True) or contains_product
             )
 
         if not contains_product:
@@ -652,6 +654,27 @@ class OfferAssignmentEmailTemplates(AbstractBaseEmailTemplate):
             email_type=self.email_type,
             active=self.active
         )
+
+
+class TemplateFileAttachment(models.Model):
+    name = models.CharField(max_length=256)
+    size = models.PositiveIntegerField()
+    url = models.URLField(max_length=300)
+    template = models.ForeignKey(OfferAssignmentEmailTemplates, on_delete=models.CASCADE, related_name="email_files")
+
+
+@receiver(post_delete, sender=TemplateFileAttachment)
+def delete_files_from_s3(sender, instance, using, **kwargs):
+    try:
+        bucket_name = settings.AWS_EMAIL_TEMPLATE_BUCKET_NAME
+        session = boto3.Session(
+            aws_access_key_id=settings.AWS_EMAIL_TEMPLATE_ACCESS_KEY_ID,
+            aws_secret_access_key=settings.AWS_EMAIL_TEMPLATE_SECRET_ACCESS_KEY
+        )
+        s3 = session.client('s3')
+        s3.delete_object(Bucket=bucket_name, Key=instance.name)
+    except Exception as ex:
+        print(str(ex))
 
 
 class OfferAssignmentEmailSentRecord(TimeStampedModel):
