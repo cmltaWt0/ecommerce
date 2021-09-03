@@ -1461,7 +1461,7 @@ class CouponCodeAssignmentSerializer(serializers.Serializer):  # pylint: disable
         subject = validated_data.pop('subject')
         greeting = validated_data.pop('greeting')
         closing = validated_data.pop('closing')
-        files = validated_data.pop('files', [])
+        files = self.context.get('files', [])
         sender_id = validated_data.pop('sender_id')
         template = validated_data.pop('template')
         enterprise_customer_uuid = validated_data.pop('enterprise_customer_uuid')
@@ -1530,7 +1530,6 @@ class CouponCodeAssignmentSerializer(serializers.Serializer):  # pylint: disable
         subject = self.context.get('subject')
         greeting = self.context.get('greeting')
         closing = self.context.get('closing')
-        files = self.context.get('files')
         template_id = self.context.get('template_id', None)
         sender_id = self.context.get('sender_id', None)
         emails = [user['email'] for user in users]
@@ -1602,19 +1601,12 @@ class CouponCodeAssignmentSerializer(serializers.Serializer):  # pylint: disable
         # If we got through all the vouchers and don't have enough slots for the emails given, the request isn't valid.
         if total_slots < len(emails):
             raise serializers.ValidationError('Not enough available codes for assignment!')
-
-        # ensure format of files object
-        for file in files:
-            if ('file_name' not in file) or ('url' not in file):
-                raise serializers.ValidationError('files arent in correct format!')
-
         # Add available_assignments to the validated data so that we can perform the assignments in create.
         attrs['voucher_usage_type'] = voucher_usage_type
         attrs['available_assignments'] = available_assignments
         attrs['subject'] = subject
         attrs['greeting'] = greeting
         attrs['closing'] = closing
-        attrs['files'] = files
         attrs['sender_id'] = sender_id
         attrs['template'] = template
         attrs['enterprise_customer_uuid'] = enterprise_customer_uuid
@@ -1630,7 +1622,6 @@ class CouponCodeAssignmentSerializer(serializers.Serializer):  # pylint: disable
         redemptions_remaining = (
             assigned_offer.offer.max_global_applications if voucher_usage_type == Voucher.MULTI_USE_PER_CUSTOMER else 1
         )
-        print('reply to', reply_to)
         try:
             send_assigned_offer_email(
                 subject=subject,
@@ -1901,7 +1892,7 @@ class CouponCodeRevokeSerializer(CouponCodeMixin, serializers.Serializer):  # py
         subject = self.context.get('subject')
         greeting = self.context.get('greeting')
         closing = self.context.get('closing')
-        files = validated_data.pop('files', [])
+        files = self.context.get('files', [])
         site = self.context.get('site')
         detail = 'success'
         current_date_time = timezone.now()
@@ -1952,22 +1943,15 @@ class CouponCodeRevokeSerializer(CouponCodeMixin, serializers.Serializer):  # py
         coupon = self.context.get('coupon')
         template_id = self.context.get('template_id', None)
         sender_id = self.context.get('sender_id', None)
-        files = self.context.get('files',[])
         template = OfferAssignmentEmailTemplates.get_template(template_id)
         enterprise_customer_uuid = coupon.attr.enterprise_customer_uuid
         self.validate_coupon_has_code(coupon, code)
         offer_assignments = self.get_unredeemed_offer_assignments(code, user['email'])
         if not offer_assignments.exists():
             raise serializers.ValidationError(f'No assignments exist for user {user["email"]} and code {code}')
-        # ensure format of files object
-        for file in files:
-            if ('file_name' not in file) or ('url' not in file):
-                raise serializers.ValidationError('files arent in correct format!')
-
         attrs['offer_assignments'] = offer_assignments
         attrs['sender_id'] = sender_id
         attrs['template'] = template
-        attrs['files'] = files
         attrs['enterprise_customer_uuid'] = enterprise_customer_uuid
         return attrs
 
@@ -1997,7 +1981,7 @@ class CouponCodeRemindSerializer(CouponCodeMixin, serializers.Serializer):  # py
         subject = self.context.get('subject')
         greeting = self.context.get('greeting')
         closing = self.context.get('closing')
-        files = validated_data.pop('files', [])
+        files = self.context.get('files', [])
         base_enterprise_url = self.context.get('base_enterprise_url', '')
         detail = 'success'
         current_date_time = timezone.now()
@@ -2046,7 +2030,6 @@ class CouponCodeRemindSerializer(CouponCodeMixin, serializers.Serializer):  # py
         user = attrs.get('user')
         coupon = self.context.get('coupon')
         template_id = self.context.get('template_id', None)
-        files = self.context.get('files', [])
         sender_id = self.context.get('sender_id', None)
         template = OfferAssignmentEmailTemplates.get_template(template_id)
         enterprise_customer_uuid = coupon.attr.enterprise_customer_uuid
@@ -2059,16 +2042,10 @@ class CouponCodeRemindSerializer(CouponCodeMixin, serializers.Serializer):  # py
         )
         if not offer_assignments.exists():
             raise serializers.ValidationError(f'No assignments exist for user {user["email"]} and code {code}')
-        # ensure format of files object
-        for file in files:
-            if ('file_name' not in file) or ('url' not in file):
-                raise serializers.ValidationError('files arent in correct format!')
-
         attrs['offer_assignments'] = offer_assignments
         attrs['redeemed_offer_count'] = offer_assignments_redeemed.count()
         attrs['total_offer_count'] = offer_assignments.count()
         attrs['sender_id'] = sender_id
-        attrs['files'] = files
         attrs['template'] = template
         attrs['enterprise_customer_uuid'] = enterprise_customer_uuid
         return attrs
