@@ -1,8 +1,8 @@
 import datetime
 import logging
 import re
-import boto3
 
+import boto3
 from dateutil.relativedelta import relativedelta
 from django.conf import settings
 from django.contrib.contenttypes.fields import GenericForeignKey

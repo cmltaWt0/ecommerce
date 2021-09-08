@@ -1,15 +1,15 @@
 
+import datetime
+import io
 import logging
 from smtplib import SMTPException
-import io
-import datetime
-import boto3
 from urllib.parse import quote
 
+import boto3
 from django.conf import settings
 from django.core.mail import send_mail
-from oscar.core.loading import get_model
 from django.utils.text import slugify
+from oscar.core.loading import get_model
 
 from ecommerce.enterprise.utils import get_enterprise_customer
 

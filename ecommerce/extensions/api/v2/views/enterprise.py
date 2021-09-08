@@ -46,7 +46,11 @@ from ecommerce.extensions.api.serializers import (
     RefundedOrderCreateVoucherSerializer,
     TemplateFileAttachmentSerializer
 )
-from ecommerce.extensions.api.v2.utils import get_enterprise_from_product, send_new_codes_notification_email, upload_files_for_enterprise_coupons
+from ecommerce.extensions.api.v2.utils import (
+    get_enterprise_from_product,
+    send_new_codes_notification_email,
+    upload_files_for_enterprise_coupons
+)
 from ecommerce.extensions.api.v2.views.coupons import CouponViewSet
 from ecommerce.extensions.catalogue.utils import (
     attach_or_update_contract_metadata_on_coupon,
@@ -54,6 +58,7 @@ from ecommerce.extensions.catalogue.utils import (
     create_coupon_product_and_stockrecord
 )
 from ecommerce.extensions.offer.constants import (
+    MAX_FILES_SIZE_FOR_COUPONS,
     OFFER_ASSIGNED,
     OFFER_ASSIGNMENT_EMAIL_PENDING,
     OFFER_ASSIGNMENT_EMAIL_SUBJECT_LIMIT,
@@ -63,8 +68,7 @@ from ecommerce.extensions.offer.constants import (
     VOUCHER_NOT_ASSIGNED,
     VOUCHER_NOT_REDEEMED,
     VOUCHER_PARTIAL_REDEEMED,
-    VOUCHER_REDEEMED,
-    MAX_FILES_SIZE_FOR_COUPONS,
+    VOUCHER_REDEEMED
 )
 from ecommerce.extensions.offer.utils import update_assignments_for_multi_use_per_customer
 from ecommerce.extensions.voucher.utils import (
@@ -1032,7 +1036,3 @@ class OfferAssignmentEmailTemplatesViewSet(PermissionRequiredMixin, ModelViewSet
         files_to_send = TemplateFileAttachmentSerializer(files_to_send, many=True)
         updated_template_response.data.update({'email_files': files_to_send.data})
         return updated_template_response
-
-
-
-
