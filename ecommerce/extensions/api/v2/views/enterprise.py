@@ -209,7 +209,6 @@ class OfferAssignmentSummaryViewSet(ModelViewSet):
         return list(offer_assignments_with_counts.values())
 
 
-
 class EnterpriseCouponViewSet(CouponViewSet):
     """ Coupon resource. """
     pagination_class = DatatablesDefaultPagination
@@ -567,8 +566,7 @@ class EnterpriseCouponViewSet(CouponViewSet):
         # and so will support much larger total data sets.
         # We also end up with a final query that uses the indexed 'id' value
         # for fast lookup instead of any other values.
-        voucher_ids_from_offer_assignments = [id for id in OfferAssignment.objects.filter(
-            # pylint: disable=unnecessary-comprehension
+        voucher_ids_from_offer_assignments = [id for id in OfferAssignment.objects.filter( # pylint: disable=unnecessary-comprehension
             no_voucher_application,
             user_email=user_email,
             status__in=[OFFER_ASSIGNED, OFFER_ASSIGNMENT_EMAIL_PENDING], )
@@ -579,8 +577,7 @@ class EnterpriseCouponViewSet(CouponViewSet):
         # but only if the user exists (there is a chance it does not, as code
         # assignment only requires an email, and not an account on the system)
         if user is not None:
-            voucher_ids_from_voucher_applications = [id for id in VoucherApplication.objects.filter(
-                # pylint: disable=unnecessary-comprehension
+            voucher_ids_from_voucher_applications = [id for id in VoucherApplication.objects.filter( # pylint: disable=unnecessary-comprehension
                 user=user
             ).values_list('voucher_id', flat=True)]
         else:
@@ -995,7 +992,7 @@ class OfferAssignmentEmailTemplatesViewSet(PermissionRequiredMixin, ModelViewSet
     def create(self, request, *args, **kwargs):
         email_files = request.data.pop('email_files', [])
         total_files_size = 0
-        [total_files_size := total_files_size + file['size'] for file in email_files]
+        [total_files_size := total_files_size + file['size'] for file in email_files]  # pylint: disable=pointless-statement
         if total_files_size > MAX_FILES_SIZE_FOR_COUPONS:
             raise serializers.ValidationError('total files size must be less than 2mb')
         saved_template_response = super(OfferAssignmentEmailTemplatesViewSet, self).create(request, *args, **kwargs)
@@ -1015,7 +1012,7 @@ class OfferAssignmentEmailTemplatesViewSet(PermissionRequiredMixin, ModelViewSet
     def update(self, request, *args, **kwargs):
         email_files = request.data.pop('email_files', [])
         total_files_size = 0
-        [total_files_size := total_files_size + file['size'] for file in email_files]
+        [total_files_size := total_files_size + file['size'] for file in email_files]  # pylint: disable=pointless-statement
         if total_files_size > MAX_FILES_SIZE_FOR_COUPONS:
             raise serializers.ValidationError('total files size must be less than 2mb')
         updated_template_response = super(OfferAssignmentEmailTemplatesViewSet, self).update(request, *args, **kwargs)

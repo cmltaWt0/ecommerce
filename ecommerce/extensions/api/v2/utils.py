@@ -3,7 +3,6 @@ import datetime
 import io
 import logging
 from smtplib import SMTPException
-from urllib.parse import quote
 
 import boto3
 from django.conf import settings
@@ -77,7 +76,6 @@ def upload_files_for_enterprise_coupons(files):
             file_buf = io.BytesIO(bytes(file['contents'], encoding="raw_unicode_escape"))
             file_buf.seek(0)
             filename = datetime.datetime.now().strftime("%d-%m-%Y at %H.%M.%S") + " " + file['name']
-            # key = quote(filename, safe="~()*!.'")
             key = slugify(filename)
             s3.upload_fileobj(file_buf, bucket_name, key)
             location = s3.get_bucket_location(Bucket=bucket_name)['LocationConstraint']

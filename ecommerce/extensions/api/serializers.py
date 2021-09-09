@@ -969,6 +969,7 @@ class TemplateFileAttachmentSerializer(serializers.ModelSerializer):
         model = TemplateFileAttachment
         fields = "__all__"
 
+
 class OfferAssignmentEmailTemplatesSerializer(serializers.ModelSerializer):
     enterprise_customer = serializers.UUIDField(read_only=True)
     email_body = serializers.SerializerMethodField()
@@ -1556,12 +1557,12 @@ class CouponCodeAssignmentSerializer(serializers.Serializer):  # pylint: disable
                 user__email__in=emails
             )
             codes_to_exclude = (
-                    [assignment.code for assignment in existing_assignments_for_users] +
-                    [application.voucher.code for application in existing_applications_for_users]
+                [assignment.code for assignment in existing_assignments_for_users] +
+                [application.voucher.code for application in existing_applications_for_users]
             )
             emails_requiring_exclusions = (
-                    [assignment.user_email for assignment in existing_assignments_for_users] +
-                    [application.user.email for application in existing_applications_for_users]
+                [assignment.user_email for assignment in existing_assignments_for_users] +
+                [application.user.email for application in existing_applications_for_users]
             )
             logger.info(
                 'Excluding the following codes because they have been assigned to or redeemed by '
@@ -1612,6 +1613,7 @@ class CouponCodeAssignmentSerializer(serializers.Serializer):  # pylint: disable
         attrs['enterprise_customer_uuid'] = enterprise_customer_uuid
         return attrs
 
+    # pylint: disable=dangerous-default-value
     def _trigger_email_sending_task(self, subject, greeting, closing, assigned_offer, voucher_usage_type, sender_alias,
                                     reply_to, base_enterprise_url='', attachments=[]):
         """
@@ -1638,7 +1640,7 @@ class CouponCodeAssignmentSerializer(serializers.Serializer):  # pylint: disable
                 attachments=attachments,
             )
         except Exception as exc:  # pylint: disable=broad-except
-            logger.exception(
+            logger.exception(  # pylint: disable=logging-too-many-args
                 '[Offer Assignment] Email for offer_assignment_id: %d with subject %r, '
                 'greeting %r and closing %r raised exception: %r',
                 assigned_offer.id,
@@ -2050,6 +2052,7 @@ class CouponCodeRemindSerializer(CouponCodeMixin, serializers.Serializer):  # py
         attrs['enterprise_customer_uuid'] = enterprise_customer_uuid
         return attrs
 
+    # pylint: disable=dangerous-default-value
     def _trigger_email_sending_task(
             self, subject, greeting, closing, assigned_offer, redeemed_offer_count, total_offer_count, sender_alias,
             reply_to, base_enterprise_url='', attachments=[],
@@ -2076,7 +2079,7 @@ class CouponCodeRemindSerializer(CouponCodeMixin, serializers.Serializer):  # py
             )
         except Exception as exc:  # pylint: disable=broad-except
             # Log the exception here to help diagnose any template issues, then raise it for backwards compatibility
-            logger.exception(
+            logger.exception(  # pylint: disable=logging-too-many-args
                 '[Offer Reminder] Email for offer_assignment_id: %d with subject %r, '
                 'greeting %r and closing %r and base_enterprise_url %r raised exception: %r',
                 assigned_offer.id,

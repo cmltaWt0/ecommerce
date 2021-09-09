@@ -157,7 +157,7 @@ def format_assigned_offer_email(
     return format_email(email_template, placeholder_dict, greeting, closing, base_enterprise_url)
 
 
-def send_assigned_offer_email(
+def send_assigned_offer_email(  # pylint: disable=dangerous-default-value
         subject,
         greeting,
         closing,
@@ -210,7 +210,7 @@ def send_assigned_offer_email(
                                       reply_to, attachments=attachments, base_enterprise_url=base_enterprise_url)
 
 
-def send_revoked_offer_email(
+def send_revoked_offer_email(  # pylint: disable=dangerous-default-value
         subject,
         greeting,
         closing,
@@ -253,7 +253,7 @@ def send_revoked_offer_email(
     send_offer_update_email.delay(learner_email, subject, email_body, sender_alias, reply_to, attachments=attachments)
 
 
-def send_assigned_offer_reminder_email(
+def send_assigned_offer_reminder_email(  # pylint: disable=dangerous-default-value
         subject,
         greeting,
         closing,

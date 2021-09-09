@@ -3,6 +3,7 @@ import logging
 import re
 
 import boto3
+from botocore.exceptions import ClientError
 from dateutil.relativedelta import relativedelta
 from django.conf import settings
 from django.contrib.contenttypes.fields import GenericForeignKey
@@ -48,7 +49,7 @@ OFFER_PRIORITY_ENTERPRISE = 10
 OFFER_PRIORITY_VOUCHER = 20
 OFFER_PRIORITY_MANUAL_ORDER = 100
 LIMIT = models.Q(app_label='offer', model='offerassignmentemailtemplates') | \
-        models.Q(app_label='offer', model='codeassignmentnudgeemailtemplates')
+    models.Q(app_label='offer', model='codeassignmentnudgeemailtemplates')
 
 logger = logging.getLogger(__name__)
 
@@ -83,8 +84,8 @@ class Benefit(AbstractBenefit):
         return [
             line for line in lines
             if (line.product.is_seat_product or line.product.is_course_entitlement_product) and
-               hasattr(line.product.attr, 'certificate_type') and
-               line.product.attr.certificate_type.lower() in applicable_range.course_seat_types
+            hasattr(line.product.attr, 'certificate_type') and
+            line.product.attr.certificate_type.lower() in applicable_range.course_seat_types
         ]
 
     def _identify_uncached_product_identifiers(self, lines, domain, partner_code, query):
@@ -509,7 +510,7 @@ class Range(AbstractRange):
 
         elif self.catalog:
             contains_product = (
-                    product.id in self.catalog.stock_records.values_list('product', flat=True) or contains_product
+                product.id in self.catalog.stock_records.values_list('product', flat=True) or contains_product
             )
 
         if not contains_product:
@@ -664,7 +665,7 @@ class TemplateFileAttachment(models.Model):
 
 
 @receiver(post_delete, sender=TemplateFileAttachment)
-def delete_files_from_s3(sender, instance, using, **kwargs):
+def delete_files_from_s3(sender, instance, using, **kwargs):  # pylint: disable=unused-argument
     try:
         bucket_name = settings.AWS_EMAIL_TEMPLATE_BUCKET_NAME
         session = boto3.Session(
@@ -673,8 +674,13 @@ def delete_files_from_s3(sender, instance, using, **kwargs):
         )
         s3 = session.client('s3')
         s3.delete_object(Bucket=bucket_name, Key=instance.name)
-    except Exception as ex:
-        print(str(ex))
+    except ClientError as error:
+        logger.error(
+            '[TemplateFileAttachment] Raised an error while deleting the object  %s,'
+            'Message: %s',
+            instance,
+            error.response['Error']['Message']
+        )
 
 
 class OfferAssignmentEmailSentRecord(TimeStampedModel):
