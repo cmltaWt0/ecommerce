@@ -1642,7 +1642,7 @@ class CouponCodeAssignmentSerializer(serializers.Serializer):  # pylint: disable
         except Exception as exc:  # pylint: disable=broad-except
             logger.exception(  # pylint: disable=logging-too-many-args
                 '[Offer Assignment] Email for offer_assignment_id: %d with subject %r, '
-                'greeting %r and closing %r raised exception: %r',
+                'greeting %r closing %r and attachments %r, raised exception: %r',
                 assigned_offer.id,
                 subject,
                 greeting,
@@ -1930,7 +1930,13 @@ class CouponCodeRevokeSerializer(CouponCodeMixin, serializers.Serializer):  # py
                 )
         except Exception as exc:  # pylint: disable=broad-except
             logger.exception('[Offer Revocation] Encountered error when revoking code %s for user %s with '
-                             'subject %r, greeting %r and closing %r', code, user['email'], subject, greeting, closing)
+                             'subject %r, greeting %r closing %r and files %r',
+                             code,
+                             user['email'],
+                             subject,
+                             greeting,
+                             closing,
+                             files)
             detail = str(exc)
 
         validated_data['detail'] = detail
@@ -2081,7 +2087,7 @@ class CouponCodeRemindSerializer(CouponCodeMixin, serializers.Serializer):  # py
             # Log the exception here to help diagnose any template issues, then raise it for backwards compatibility
             logger.exception(  # pylint: disable=logging-too-many-args
                 '[Offer Reminder] Email for offer_assignment_id: %d with subject %r, '
-                'greeting %r and closing %r and base_enterprise_url %r raised exception: %r',
+                'greeting %r closing %r attachments %r, and base_enterprise_url %r raised exception: %r',
                 assigned_offer.id,
                 subject,
                 greeting,
