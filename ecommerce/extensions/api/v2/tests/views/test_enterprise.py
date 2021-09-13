@@ -82,7 +82,7 @@ OFFER_ASSIGNMENT_SUMMARY_LINK = reverse('api:v2:enterprise-offer-assignment-summ
 TEMPLATE_SUBJECT = 'Test Subject '
 TEMPLATE_GREETING = 'hello there '
 TEMPLATE_CLOSING = ' kind regards'
-TEMPLATE_FILES_WITH_URL = [{'name': 'abc.png', 'size':123,'url':'www.example.com/abc-png'}, {'name': 'def.png', 'size': 456, 'contents': 'dummy-content'}]
+TEMPLATE_FILES_WITH_URL = [{'name': 'abc.png', 'size': 123, 'url': 'www.example.com/abc-png'}, {'name': 'def.png', 'size': 456, 'contents': 'dummy-content'}]
 
 
 class TestEnterpriseCustomerView(EnterpriseServiceMockMixin, TestCase):
