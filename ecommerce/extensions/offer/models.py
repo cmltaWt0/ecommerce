@@ -663,6 +663,9 @@ class TemplateFileAttachment(models.Model):
     url = models.URLField(max_length=300)
     template = models.ForeignKey(OfferAssignmentEmailTemplates, on_delete=models.CASCADE, related_name="email_files")
 
+    def __str__(self):
+        return 'name={}, size={}, url={}, template={}'.format(self.name, self.size, self.url, self.template)
+
 
 @receiver(post_delete, sender=TemplateFileAttachment)
 def delete_files_from_s3(sender, instance, using, **kwargs):  # pylint: disable=unused-argument

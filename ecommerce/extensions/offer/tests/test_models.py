@@ -6,6 +6,7 @@ from uuid import uuid4
 import ddt
 import httpretty
 from django.core.exceptions import ValidationError
+from django.db.models.signals import post_delete
 from django.utils.timezone import now
 from edx_django_utils.cache import TieredCache
 from mock import patch
@@ -18,6 +19,7 @@ from slumber.exceptions import SlumberBaseException
 from ecommerce.coupons.tests.mixins import CouponMixin, DiscoveryMockMixin
 from ecommerce.extensions.catalogue.tests.mixins import DiscoveryTestMixin
 from ecommerce.extensions.offer.constants import ASSIGN, DAY3, DAY10, DAY19, REMIND, REVOKE
+from ecommerce.extensions.offer.models import delete_files_from_s3
 from ecommerce.extensions.test.factories import CodeAssignmentNudgeEmailTemplatesFactory
 from ecommerce.tests.factories import UserFactory
 from ecommerce.tests.testcases import TestCase
@@ -25,6 +27,7 @@ from ecommerce.tests.testcases import TestCase
 Catalog = get_model('catalogue', 'Catalog')
 ConditionalOffer = get_model('offer', 'ConditionalOffer')
 OfferAssignmentEmailTemplates = get_model('offer', 'OfferAssignmentEmailTemplates')
+TemplateFileAttachment = get_model('offer', 'TemplateFileAttachment')
 OfferAssignmentEmailSentRecord = get_model('offer', 'OfferAssignmentEmailSentRecord')
 Range = get_model('offer', 'Range')
 CodeAssignmentNudgeEmails = get_model('offer', 'CodeAssignmentNudgeEmails')
@@ -661,3 +664,56 @@ class TestCodeAssignmentNudgeEmails(TestCase):
         assert not nudge_email.already_sent
         assert nudge_email.is_subscribed
         assert nudge_email.options['base_enterprise_url'] == ''
+
+@ddt.ddt
+class TestTemplateFileAttachment(TestCase):
+    """Tests for the TemplateFileAttachment."""
+
+    def _create_template(self, enterprise_customer, email_type):
+        """Helper method to create OfferAssignmentEmailTemplates instance with the given email type."""
+        return OfferAssignmentEmailTemplates.objects.create(
+            enterprise_customer=enterprise_customer,
+            email_type=email_type,
+            email_greeting='test greeting',
+            email_closing='test closing',
+            email_subject='template subject',
+            active=True,
+            name='test template'
+        )
+
+    def _create_template_file_attachment(self, name, size, url, template):
+        template_file = TemplateFileAttachment(
+            name=name,
+            size=size,
+            url=url,
+            template=template
+        )
+        template_file.save()
+        return template_file
+
+    @ddt.data(
+        (str(uuid4()), ASSIGN, "abc.png", 123, "www.example.com/abc-png"),
+        (str(uuid4()), REMIND, "def.png", 456, "www.example.com/def-png"),
+        (str(uuid4()), REVOKE, "ghi.png", 789, "www.example.com/ghi-png"),
+    )
+    @ddt.unpack
+    def test_models_is_created_with_correct_values(self, enterprise_customer, email_type, name, size, url):
+        template = self._create_template(enterprise_customer, email_type)
+        template_file = self._create_template_file_attachment(name, size, url, template)
+        print(template_file.__str__())
+        assert 'name={}, size={}, url={}, template={}'.format(name, size, url, template) == str(template_file)
+
+    @ddt.data(
+        (str(uuid4()), ASSIGN, "abc.png", 123, "www.example.com/abc-png"),
+        (str(uuid4()), REMIND, "def.png", 456, "www.example.com/def-png"),
+        (str(uuid4()), REVOKE, "ghi.png", 789, "www.example.com/ghi-png"),
+    )
+    @ddt.unpack
+    def test_post_delete_signal_called_on_file_delete(self, enterprise_customer, email_type, name, size, url):
+        template = self._create_template(enterprise_customer, email_type)
+        template_file = self._create_template_file_attachment(name, size, url, template)
+        post_delete.disconnect(delete_files_from_s3, TemplateFileAttachment)
+        with patch('ecommerce.extensions.offer.models.delete_files_from_s3', autospec=True) as post_del_signal:
+            post_delete.connect(post_del_signal, sender=TemplateFileAttachment)
+            template_file.delete()
+        assert post_del_signal.call_count == 1
