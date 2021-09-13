@@ -665,7 +665,7 @@ class TestCodeAssignmentNudgeEmails(TestCase):
         assert nudge_email.is_subscribed
         assert nudge_email.options['base_enterprise_url'] == ''
 
-        
+
 @ddt.ddt
 class TestTemplateFileAttachment(TestCase):
     """Tests for the TemplateFileAttachment."""
