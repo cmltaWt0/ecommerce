@@ -82,7 +82,9 @@ OFFER_ASSIGNMENT_SUMMARY_LINK = reverse('api:v2:enterprise-offer-assignment-summ
 TEMPLATE_SUBJECT = 'Test Subject '
 TEMPLATE_GREETING = 'hello there '
 TEMPLATE_CLOSING = ' kind regards'
-TEMPLATE_FILES_WITH_URL = [{'name': 'abc.png', 'size': 123, 'url': 'www.example.com/abc-png'}, {'name': 'def.png', 'size': 456, 'contents': 'dummy-content'}]
+TEMPLATE_FILES_WITH_URL = [{'name': 'abc.png', 'size': 123, 'url': 'www.example.com/abc-png'},
+                           {'name': 'def.png', 'size': 456, 'contents': 'dummy-content'}]
+UPLOAD_FILES_TO_S3_PATH = 'ecommerce.extensions.api.v2.views.enterprise.upload_files_for_enterprise_coupons'
 
 
 class TestEnterpriseCustomerView(EnterpriseServiceMockMixin, TestCase):
@@ -577,7 +579,7 @@ class EnterpriseCouponViewSetRbacTests(
                     for email_index in range(code_assignments[i])
                 ]
 
-            with mock.patch('ecommerce.extensions.api.v2.views.enterprise.upload_files_for_enterprise_coupons') as mock_file_uploader:
+            with mock.patch(UPLOAD_FILES_TO_S3_PATH) as mock_file_uploader:
                 mock_file_uploader.return_value = [
                     {'name': 'def.png', 'size': 456, 'url': 'www.example.com/def-png'}
                 ]
@@ -594,7 +596,8 @@ class EnterpriseCouponViewSetRbacTests(
                         'template_files': TEMPLATE_FILES_WITH_URL,
                     }
                 )
-                mock_file_uploader.assert_called_once_with([{'name': 'def.png', 'size': 456, 'contents': 'dummy-content'}])
+                mock_file_uploader.assert_called_once_with(
+                    [{'name': 'def.png', 'size': 456, 'contents': 'dummy-content'}])
 
     def use_voucher(self, voucher, user):
         """
@@ -649,7 +652,7 @@ class EnterpriseCouponViewSetRbacTests(
 
     def assign_user_to_code(self, coupon_id, users, codes):
         with mock.patch('ecommerce.extensions.offer.utils.send_offer_assignment_email.delay'):
-            with mock.patch('ecommerce.extensions.api.v2.views.enterprise.upload_files_for_enterprise_coupons') as mock_file_uploader:
+            with mock.patch(UPLOAD_FILES_TO_S3_PATH) as mock_file_uploader:
                 mock_file_uploader.return_value = [
                     {'name': 'def.png', 'size': 456, 'url': 'www.example.com/def-png'}
                 ]
@@ -829,7 +832,7 @@ class EnterpriseCouponViewSetRbacTests(
             )
             vouchers = Product.objects.get(id=coupon.id).attr.coupon_vouchers.vouchers.all()
             codes = [voucher.code for voucher in vouchers]
-            with mock.patch('ecommerce.extensions.api.v2.views.enterprise.upload_files_for_enterprise_coupons') as mock_file_uploader:
+            with mock.patch(UPLOAD_FILES_TO_S3_PATH) as mock_file_uploader:
                 mock_file_uploader.return_value = [
                     {'name': 'def.png', 'size': 456, 'url': 'www.example.com/def-png'}
                 ]
@@ -847,7 +850,8 @@ class EnterpriseCouponViewSetRbacTests(
                         'base_enterprise_url': 'https://bears.party'
                     }
                 )
-                mock_file_uploader.assert_called_once_with([{'name': 'def.png', 'size': 456, 'contents': 'dummy-content'}])
+                mock_file_uploader.assert_called_once_with(
+                    [{'name': 'def.png', 'size': 456, 'contents': 'dummy-content'}])
                 assert response.status_code == 200
 
     def test_coupon_codes_detail_with_invalid_coupon_id(self):
@@ -1892,7 +1896,7 @@ class EnterpriseCouponViewSetRbacTests(
         coupon = coupon.json()
         coupon_id = coupon['coupon_id']
         with mock.patch('ecommerce.extensions.offer.utils.send_offer_assignment_email.delay') as mock_send_email:
-            with mock.patch('ecommerce.extensions.api.v2.views.enterprise.upload_files_for_enterprise_coupons') as mock_file_uploader:
+            with mock.patch(UPLOAD_FILES_TO_S3_PATH) as mock_file_uploader:
                 mock_file_uploader.return_value = [
                     {'name': 'def.png', 'size': 456, 'url': 'www.example.com/def-png'}
                 ]
@@ -1909,7 +1913,8 @@ class EnterpriseCouponViewSetRbacTests(
                         'enable_nudge_emails': enable_nudge_emails
                     }
                 )
-                mock_file_uploader.assert_called_once_with([{'name': 'def.png', 'size': 456, 'contents': 'dummy-content'}])
+                mock_file_uploader.assert_called_once_with(
+                    [{'name': 'def.png', 'size': 456, 'contents': 'dummy-content'}])
         response = response.json()
         assert mock_send_email.call_count == len(users)
         for i, user in enumerate(users):
@@ -1945,7 +1950,7 @@ class EnterpriseCouponViewSetRbacTests(
 
         users = [{'email': 't1@example.com'}, {'email': 't2@example.com'}]
         with mock.patch('ecommerce.extensions.offer.utils.send_offer_assignment_email.delay') as mock_send_email:
-            with mock.patch('ecommerce.extensions.api.v2.views.enterprise.upload_files_for_enterprise_coupons') as mock_file_uploader:
+            with mock.patch(UPLOAD_FILES_TO_S3_PATH) as mock_file_uploader:
                 mock_file_uploader.return_value = [
                     {'name': 'def.png', 'size': 456, 'url': 'www.example.com/def-png'}
                 ]
@@ -1962,7 +1967,8 @@ class EnterpriseCouponViewSetRbacTests(
                         'codes': codes_param
                     }
                 )
-                mock_file_uploader.assert_called_once_with([{'name': 'def.png', 'size': 456, 'contents': 'dummy-content'}])
+                mock_file_uploader.assert_called_once_with(
+                    [{'name': 'def.png', 'size': 456, 'contents': 'dummy-content'}])
         response = response.json()
         assert mock_send_email.call_count == len(users)
         for i, user in enumerate(users):
@@ -1990,7 +1996,7 @@ class EnterpriseCouponViewSetRbacTests(
         unused_codes = [voucher.code for voucher in vouchers[3:]]
         users = [{'email': 't1@example.com'}, {'email': 't2@example.com'}]
         with mock.patch('ecommerce.extensions.offer.utils.send_offer_assignment_email.delay') as mock_send_email:
-            with mock.patch('ecommerce.extensions.api.v2.views.enterprise.upload_files_for_enterprise_coupons') as mock_file_uploader:
+            with mock.patch(UPLOAD_FILES_TO_S3_PATH) as mock_file_uploader:
                 mock_file_uploader.return_value = [
                     {'name': 'def.png', 'size': 456, 'url': 'www.example.com/def-png'}
                 ]
@@ -2006,7 +2012,8 @@ class EnterpriseCouponViewSetRbacTests(
                         'users': users
                     }
                 )
-                mock_file_uploader.assert_called_once_with([{'name': 'def.png', 'size': 456, 'contents': 'dummy-content'}])
+                mock_file_uploader.assert_called_once_with(
+                    [{'name': 'def.png', 'size': 456, 'contents': 'dummy-content'}])
         response = response.json()
         assert mock_send_email.call_count == len(users)
         for i, user in enumerate(users):
@@ -2068,7 +2075,7 @@ class EnterpriseCouponViewSetRbacTests(
         )
         users = [{'email': 't1@example.com'}, {'email': 't2@example.com'}, {'email': 't3@example.com'}]
         with mock.patch('ecommerce.extensions.offer.utils.send_offer_assignment_email.delay') as mock_send_email:
-            with mock.patch('ecommerce.extensions.api.v2.views.enterprise.upload_files_for_enterprise_coupons') as mock_file_uploader:
+            with mock.patch(UPLOAD_FILES_TO_S3_PATH) as mock_file_uploader:
                 mock_file_uploader.return_value = [
                     {'name': 'def.png', 'size': 456, 'url': 'www.example.com/def-png'}
                 ]
@@ -2084,7 +2091,8 @@ class EnterpriseCouponViewSetRbacTests(
                         'users': users
                     }
                 )
-                mock_file_uploader.assert_called_once_with([{'name': 'def.png', 'size': 456, 'contents': 'dummy-content'}])
+                mock_file_uploader.assert_called_once_with(
+                    [{'name': 'def.png', 'size': 456, 'contents': 'dummy-content'}])
         response = response.json()
         assert mock_send_email.call_count == len(users)
         for i, user in enumerate(users):
@@ -2106,7 +2114,7 @@ class EnterpriseCouponViewSetRbacTests(
         user = {'email': 't1@example.com'}
         # Assign the code to the user.
         with mock.patch('ecommerce.extensions.offer.utils.send_offer_assignment_email.delay') as mock_send_email:
-            with mock.patch('ecommerce.extensions.api.v2.views.enterprise.upload_files_for_enterprise_coupons') as mock_file_uploader:
+            with mock.patch(UPLOAD_FILES_TO_S3_PATH) as mock_file_uploader:
                 mock_file_uploader.return_value = [
                     {'name': 'def.png', 'size': 456, 'url': 'www.example.com/def-png'}
                 ]
@@ -2122,7 +2130,8 @@ class EnterpriseCouponViewSetRbacTests(
                         'users': [user]
                     }
                 )
-                mock_file_uploader.assert_called_once_with([{'name': 'def.png', 'size': 456, 'contents': 'dummy-content'}])
+                mock_file_uploader.assert_called_once_with(
+                    [{'name': 'def.png', 'size': 456, 'contents': 'dummy-content'}])
 
         response = response.json()
         assert mock_send_email.call_count == 1
@@ -2142,7 +2151,7 @@ class EnterpriseCouponViewSetRbacTests(
 
         # Assign the same code to the user again.
         with mock.patch('ecommerce.extensions.offer.utils.send_offer_assignment_email.delay') as mock_send_email:
-            with mock.patch('ecommerce.extensions.api.v2.views.enterprise.upload_files_for_enterprise_coupons') as mock_file_uploader:
+            with mock.patch(UPLOAD_FILES_TO_S3_PATH) as mock_file_uploader:
                 mock_file_uploader.return_value = [
                     {'name': 'def.png', 'size': 456, 'url': 'www.example.com/def-png'}
                 ]
@@ -2158,7 +2167,8 @@ class EnterpriseCouponViewSetRbacTests(
                         'users': [user]
                     }
                 )
-                mock_file_uploader.assert_called_once_with([{'name': 'def.png', 'size': 456, 'contents': 'dummy-content'}])
+                mock_file_uploader.assert_called_once_with(
+                    [{'name': 'def.png', 'size': 456, 'contents': 'dummy-content'}])
         response = response.json()
         assert mock_send_email.call_count == 1
         assert response['offer_assignments'][0]['user_email'] == user['email']
@@ -2220,7 +2230,7 @@ class EnterpriseCouponViewSetRbacTests(
                 'ecommerce.extensions.offer.utils.send_offer_assignment_email.delay',
                 side_effect=Exception()) as mock_send_email:
             with mock.patch(
-                    'ecommerce.extensions.api.v2.views.enterprise.upload_files_for_enterprise_coupons') as mock_file_uploader:
+                    UPLOAD_FILES_TO_S3_PATH) as mock_file_uploader:
                 mock_file_uploader.return_value = [
                     {'name': 'def.png', 'size': 456, 'url': 'www.example.com/def-png'}
                 ]
@@ -2236,7 +2246,8 @@ class EnterpriseCouponViewSetRbacTests(
                         'users': users
                     }
                 )
-                mock_file_uploader.assert_called_once_with([{'name': 'def.png', 'size': 456, 'contents': 'dummy-content'}])
+                mock_file_uploader.assert_called_once_with(
+                    [{'name': 'def.png', 'size': 456, 'contents': 'dummy-content'}])
         response = response.json()
         assert mock_send_email.call_count == len(users)
         for i, user in enumerate(users):
@@ -2427,7 +2438,7 @@ class EnterpriseCouponViewSetRbacTests(
         coupon = coupon.json()
         coupon_id = coupon['coupon_id']
         with mock.patch('ecommerce.extensions.offer.utils.send_offer_assignment_email.delay'):
-            with mock.patch('ecommerce.extensions.api.v2.views.enterprise.upload_files_for_enterprise_coupons') as mock_file_uploader:
+            with mock.patch(UPLOAD_FILES_TO_S3_PATH) as mock_file_uploader:
                 mock_file_uploader.return_value = [
                     {'name': 'def.png', 'size': 456, 'url': 'www.example.com/def-png'}
                 ]
@@ -2443,7 +2454,8 @@ class EnterpriseCouponViewSetRbacTests(
                         'users': [user]
                     }
                 )
-                mock_file_uploader.assert_called_once_with([{'name': 'def.png', 'size': 456, 'contents': 'dummy-content'}])
+                mock_file_uploader.assert_called_once_with(
+                    [{'name': 'def.png', 'size': 456, 'contents': 'dummy-content'}])
 
         offer_assignment = OfferAssignment.objects.filter(user_email=user['email']).first()
 
@@ -2670,7 +2682,7 @@ class EnterpriseCouponViewSetRbacTests(
         coupon_id = coupon['coupon_id']
         with mock.patch('ecommerce.extensions.offer.utils.send_offer_assignment_email.delay'):
             with mock.patch(
-                    'ecommerce.extensions.api.v2.views.enterprise.upload_files_for_enterprise_coupons') as mock_file_uploader:
+                    UPLOAD_FILES_TO_S3_PATH) as mock_file_uploader:
                 mock_file_uploader.return_value = [
                     {'name': 'def.png', 'size': 456, 'url': 'www.example.com/def-png'}
                 ]
@@ -2693,7 +2705,7 @@ class EnterpriseCouponViewSetRbacTests(
         offer_assignment = OfferAssignment.objects.first()
         with mock.patch('ecommerce.extensions.offer.utils.send_offer_update_email.delay') as mock_send_email:
             with mock.patch(
-                    'ecommerce.extensions.api.v2.views.enterprise.upload_files_for_enterprise_coupons') as mock_file_uploader:
+                    UPLOAD_FILES_TO_S3_PATH) as mock_file_uploader:
                 mock_file_uploader.return_value = [
                     {'name': 'def.png', 'size': 456, 'url': 'www.example.com/def-png'}
                 ]
@@ -2751,7 +2763,7 @@ class EnterpriseCouponViewSetRbacTests(
         # make sure that there is no assignment object before hitting the endpoint
         self.assertIsNone(OfferAssignment.objects.first())
         with mock.patch(
-                'ecommerce.extensions.api.v2.views.enterprise.upload_files_for_enterprise_coupons') as mock_file_uploader:
+                UPLOAD_FILES_TO_S3_PATH) as mock_file_uploader:
             mock_file_uploader.return_value = [
                 {'name': 'def.png', 'size': 456, 'url': 'www.example.com/def-png'}
             ]
@@ -2801,7 +2813,7 @@ class EnterpriseCouponViewSetRbacTests(
         }
 
         with mock.patch(
-                'ecommerce.extensions.api.v2.views.enterprise.upload_files_for_enterprise_coupons') as mock_file_uploader:
+                UPLOAD_FILES_TO_S3_PATH) as mock_file_uploader:
             mock_file_uploader.return_value = [
                 {'name': 'def.png', 'size': 456, 'url': 'www.example.com/def-png'}
             ]
@@ -2833,7 +2845,7 @@ class EnterpriseCouponViewSetRbacTests(
         coupon_id = coupon['coupon_id']
         with mock.patch('ecommerce.extensions.offer.utils.send_offer_assignment_email.delay'):
             with mock.patch(
-                    'ecommerce.extensions.api.v2.views.enterprise.upload_files_for_enterprise_coupons') as mock_file_uploader:
+                    UPLOAD_FILES_TO_S3_PATH) as mock_file_uploader:
                 mock_file_uploader.return_value = [
                     {'name': 'def.png', 'size': 456, 'url': 'www.example.com/def-png'}
                 ]
@@ -2976,7 +2988,7 @@ class EnterpriseCouponViewSetRbacTests(
         coupon_id = coupon['coupon_id']
         with mock.patch('ecommerce.extensions.offer.utils.send_offer_assignment_email.delay'):
             with mock.patch(
-                    'ecommerce.extensions.api.v2.views.enterprise.upload_files_for_enterprise_coupons') as mock_file_uploader:
+                    UPLOAD_FILES_TO_S3_PATH) as mock_file_uploader:
                 mock_file_uploader.return_value = [
                     {'name': 'def.png', 'size': 456, 'url': 'www.example.com/def-png'}
                 ]
@@ -2998,7 +3010,7 @@ class EnterpriseCouponViewSetRbacTests(
         self.assertIsNone(offer_assignment.last_reminder_date)
         with mock.patch('ecommerce.extensions.offer.utils.send_offer_update_email.delay') as mock_send_email:
             with mock.patch(
-                    'ecommerce.extensions.api.v2.views.enterprise.upload_files_for_enterprise_coupons') as mock_file_uploader:
+                    UPLOAD_FILES_TO_S3_PATH) as mock_file_uploader:
                 mock_file_uploader.return_value = [
                     {'name': 'def.png', 'size': 456, 'url': 'www.example.com/def-png'}
                 ]
@@ -3050,7 +3062,7 @@ class EnterpriseCouponViewSetRbacTests(
         offer_assignments = OfferAssignment.objects.all().order_by('user_email')
         with mock.patch('ecommerce.extensions.offer.utils.send_offer_update_email.delay') as mock_send_email:
             with mock.patch(
-                    'ecommerce.extensions.api.v2.views.enterprise.upload_files_for_enterprise_coupons') as mock_file_uploader:
+                    UPLOAD_FILES_TO_S3_PATH) as mock_file_uploader:
                 mock_file_uploader.return_value = [
                     {'name': 'def.png', 'size': 456, 'url': 'www.example.com/def-png'}
                 ]
@@ -3104,7 +3116,7 @@ class EnterpriseCouponViewSetRbacTests(
         self.mock_access_token_response()
         with mock.patch('ecommerce.extensions.offer.utils.send_offer_update_email.delay') as mock_send_email:
             with mock.patch(
-                    'ecommerce.extensions.api.v2.views.enterprise.upload_files_for_enterprise_coupons') as mock_file_uploader:
+                    UPLOAD_FILES_TO_S3_PATH) as mock_file_uploader:
                 mock_file_uploader.return_value = [
                     {'name': 'def.png', 'size': 456, 'url': 'www.example.com/def-png'}
                 ]
@@ -3342,7 +3354,7 @@ class EnterpriseCouponViewSetRbacTests(
     def _make_request(self, coupon_id, email_type, mock_path, request_data):
         with mock.patch(mock_path):
             with mock.patch(
-                    'ecommerce.extensions.api.v2.views.enterprise.upload_files_for_enterprise_coupons') as mock_file_uploader:
+                    UPLOAD_FILES_TO_S3_PATH) as mock_file_uploader:
                 mock_file_uploader.return_value = [
                     {'name': 'def.png', 'size': 456, 'url': 'www.example.com/def-png'}
                 ]
@@ -3434,7 +3446,7 @@ class EnterpriseCouponViewSetRbacTests(
 
         with mock.patch('ecommerce.extensions.offer.utils.send_offer_assignment_email.delay'):
             with mock.patch(
-                    'ecommerce.extensions.api.v2.views.enterprise.upload_files_for_enterprise_coupons') as mock_file_uploader:
+                    UPLOAD_FILES_TO_S3_PATH) as mock_file_uploader:
                 mock_file_uploader.return_value = [
                     {'name': 'def.png', 'size': 456, 'url': 'www.example.com/def-png'}
                 ]
@@ -3451,7 +3463,7 @@ class EnterpriseCouponViewSetRbacTests(
                     }
                 )
                 with mock.patch(
-                        'ecommerce.extensions.api.v2.views.enterprise.upload_files_for_enterprise_coupons') as mock_file_uploader:
+                        UPLOAD_FILES_TO_S3_PATH) as mock_file_uploader:
                     mock_file_uploader.return_value = [
                         {'name': 'def.png', 'size': 456, 'url': 'www.example.com/def-png'}
                     ]
@@ -3471,7 +3483,7 @@ class EnterpriseCouponViewSetRbacTests(
 
         with mock.patch('ecommerce.extensions.offer.utils.send_offer_update_email.delay'):
             with mock.patch(
-                    'ecommerce.extensions.api.v2.views.enterprise.upload_files_for_enterprise_coupons') as mock_file_uploader:
+                    UPLOAD_FILES_TO_S3_PATH) as mock_file_uploader:
                 mock_file_uploader.return_value = [
                     {'name': 'def.png', 'size': 456, 'url': 'www.example.com/def-png'}
                 ]
@@ -3502,7 +3514,7 @@ class EnterpriseCouponViewSetRbacTests(
 
         with mock.patch('ecommerce.extensions.offer.utils.send_offer_update_email.delay'):
             with mock.patch(
-                    'ecommerce.extensions.api.v2.views.enterprise.upload_files_for_enterprise_coupons') as mock_file_uploader:
+                    UPLOAD_FILES_TO_S3_PATH) as mock_file_uploader:
                 mock_file_uploader.return_value = [
                     {'name': 'def.png', 'size': 456, 'url': 'www.example.com/def-png'}
                 ]
@@ -3633,7 +3645,7 @@ class OfferAssignmentSummaryViewSetTests(
     def assign_user_to_code(self, coupon_id, users, codes):
         with mock.patch('ecommerce.extensions.offer.utils.send_offer_assignment_email.delay'):
             with mock.patch(
-                    'ecommerce.extensions.api.v2.views.enterprise.upload_files_for_enterprise_coupons') as mock_file_uploader:
+                    UPLOAD_FILES_TO_S3_PATH) as mock_file_uploader:
                 mock_file_uploader.return_value = [
                     {'name': 'def.png', 'size': 456, 'url': 'www.example.com/def-png'}
                 ]
