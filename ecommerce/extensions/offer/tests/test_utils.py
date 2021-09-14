@@ -422,7 +422,8 @@ class UtilTests(DiscoveryTestMixin, TestCase):
             'subject',
             'hi',
             'bye',
-            [{'name': 'abc.png', 'url': 'https://www.example.com'}, {'name': 'def.png', 'url': 'https://www.example.com'}],
+            [{'name': 'abc.png', 'url': 'https://www.example.com'},
+             {'name': 'def.png', 'url': 'https://www.example.com'}],
             'sender_alias',
             'edx@example.com',
             {
