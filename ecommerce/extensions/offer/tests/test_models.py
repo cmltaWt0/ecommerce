@@ -3,8 +3,10 @@
 
 from uuid import uuid4
 
+import botocore
 import ddt
 import httpretty
+import mock
 from django.core.exceptions import ValidationError
 from django.db.models.signals import post_delete
 from django.utils.timezone import now
@@ -718,3 +720,15 @@ class TestTemplateFileAttachment(TestCase):
             post_delete.connect(post_del_signal, sender=TemplateFileAttachment)
             template_file.delete()
         assert post_del_signal.call_count == 1
+
+    def mock_make_api_call(self, operation_name, kwarg):
+        orig = botocore.client.BaseClient._make_api_call  # pylint: disable=protected-access
+        if operation_name == 'DeleteObject':  # pylint: disable=no-else-return
+            return "ok"
+        return orig(self, operation_name, kwarg)
+
+    def test_delete_files_from_s3(self):
+        template = self._create_template(uuid4(), ASSIGN)
+        template_file = self._create_template_file_attachment('abc.png', 123, 'www.example.com/abc-png', template)
+        with mock.patch('botocore.client.BaseClient._make_api_call', new=self.mock_make_api_call):
+            delete_files_from_s3(sender=TemplateFileAttachment, instance=template_file, using=None)
