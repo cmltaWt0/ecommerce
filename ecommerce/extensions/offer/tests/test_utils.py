@@ -98,7 +98,8 @@ class UtilTests(DiscoveryTestMixin, TestCase):
             'subject',
             'hi',
             'bye',
-            [{'name': 'abc.png', 'url': 'https://www.example.com'}, {'name': 'def.png', 'url': 'https://www.example.com'}],
+            [{'name': 'abc.png', 'url': 'https://www.example.com'},
+             {'name': 'def.png', 'url': 'https://www.example.com'}],
             {
                 'offer_assignment_id': 555,
                 'learner_email': 'johndoe@unknown.com',
@@ -115,7 +116,8 @@ class UtilTests(DiscoveryTestMixin, TestCase):
             'subject',
             'hi',
             'bye',
-            [{'name': 'abc.png', 'url': 'https://www.example.com'}, {'name': 'def.png', 'url': 'https://www.example.com'}],
+            [{'name': 'abc.png', 'url': 'https://www.example.com'},
+             {'name': 'def.png', 'url': 'https://www.example.com'}],
             {
                 'offer_assignment_id': 555,
                 'learner_email': 'johndoe@unknown.com',
@@ -176,7 +178,8 @@ class UtilTests(DiscoveryTestMixin, TestCase):
             'subject',
             'hi',
             'bye',
-            [{'name': 'abc.png', 'url': 'https://www.example.com'}, {'name': 'def.png', 'url': 'https://www.example.com'}],
+            [{'name': 'abc.png', 'url': 'https://www.example.com'},
+             {'name': 'def.png', 'url': 'https://www.example.com'}],
             {
                 'offer_assignment_id': 555,
                 'learner_email': 'johndoe@unknown.com',
@@ -194,7 +197,8 @@ class UtilTests(DiscoveryTestMixin, TestCase):
             'subject',
             'hi',
             'bye',
-            [{'name': 'abc.png', 'url': 'https://www.example.com'}, {'name': 'def.png', 'url': 'https://www.example.com'}],
+            [{'name': 'abc.png', 'url': 'https://www.example.com'},
+             {'name': 'def.png', 'url': 'https://www.example.com'}],
             {
                 'offer_assignment_id': 555,
                 'learner_email': 'johndoe@unknown.com',
@@ -295,7 +299,8 @@ class UtilTests(DiscoveryTestMixin, TestCase):
             'subject',
             'hi',
             'bye',
-            [{'name': 'abc.png', 'url': 'https://www.example.com'}, {'name': 'def.png', 'url': 'https://www.example.com'}],
+            [{'name': 'abc.png', 'url': 'https://www.example.com'},
+             {'name': 'def.png', 'url': 'https://www.example.com'}],
             'sender_alias',
             'edx@example.com',
             {
@@ -355,7 +360,8 @@ class UtilTests(DiscoveryTestMixin, TestCase):
             'subject',
             'hi',
             'bye',
-            [{'name': 'abc.png', 'url': 'https://www.example.com'}, {'name': 'def.png', 'url': 'https://www.example.com'}],
+            [{'name': 'abc.png', 'url': 'https://www.example.com'},
+             {'name': 'def.png', 'url': 'https://www.example.com'}],
             'sender_alias',
             'edx@example.com',
             {

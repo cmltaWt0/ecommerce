@@ -28,7 +28,8 @@ class CouponCodeSerializerTests(CouponMixin, TestCase):
     BASE_ENTERPRISE_URL = 'https://bears.party'
     SENDER_ALIAS = 'edx Support Team'
     REPLY_TO = 'edx@example.com'
-    ATTACHMENTS = [{'name': 'abc.png', 'url': 'https://www.example.com'}, {'name': 'def.png', 'url': 'https://www.example.com'}]
+    ATTACHMENTS = [{'name': 'abc.png', 'url': 'https://www.example.com'},
+                   {'name': 'def.png', 'url': 'https://www.example.com'}]
 
     def setUp(self):
         super(CouponCodeSerializerTests, self).setUp()
