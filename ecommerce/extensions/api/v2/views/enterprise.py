@@ -994,7 +994,7 @@ class OfferAssignmentEmailTemplatesViewSet(PermissionRequiredMixin, ModelViewSet
         total_files_size = 0
         [total_files_size := total_files_size + file['size'] for file in email_files]  # pylint: disable=pointless-statement
         if total_files_size > MAX_FILES_SIZE_FOR_COUPONS:
-            raise serializers.ValidationError('total files size must be less than 2mb')
+            raise serializers.ValidationError('total files size exceeds limit.')
         saved_template_response = super(OfferAssignmentEmailTemplatesViewSet, self).create(request, *args, **kwargs)
         if len(email_files) > 0:
             saved_template_id = saved_template_response.data['id']

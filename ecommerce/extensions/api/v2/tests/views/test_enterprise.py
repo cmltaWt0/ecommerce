@@ -12,6 +12,7 @@ import httpretty
 import mock
 import rules
 from django.conf import settings
+from django.db.models.signals import post_delete
 from django.test import override_settings
 from django.urls import reverse
 from django.utils import timezone
@@ -44,6 +45,7 @@ from ecommerce.extensions.offer.constants import (
     DAY3,
     DAY10,
     DAY19,
+    MAX_FILES_SIZE_FOR_COUPONS,
     OFFER_ASSIGNMENT_EMAIL_BOUNCED,
     OFFER_ASSIGNMENT_EMAIL_SUBJECT_LIMIT,
     OFFER_ASSIGNMENT_EMAIL_TEMPLATE_FIELD_LIMIT,
@@ -55,6 +57,7 @@ from ecommerce.extensions.offer.constants import (
     VOUCHER_PARTIAL_REDEEMED,
     VOUCHER_REDEEMED
 )
+from ecommerce.extensions.offer.models import delete_files_from_s3
 from ecommerce.extensions.payment.models import EnterpriseContractMetadata
 from ecommerce.extensions.test.factories import (
     CodeAssignmentNudgeEmailsFactory,
@@ -71,6 +74,7 @@ CodeAssignmentNudgeEmails = get_model('offer', 'CodeAssignmentNudgeEmails')
 OfferAssignment = get_model('offer', 'OfferAssignment')
 OfferAssignmentEmailSentRecord = get_model('offer', 'OfferAssignmentEmailSentRecord')
 OfferAssignmentEmailTemplates = get_model('offer', 'OfferAssignmentEmailTemplates')
+TemplateFileAttachment = get_model('offer', 'TemplateFileAttachment')
 CodeAssignmentNudgeEmails = get_model('offer', 'CodeAssignmentNudgeEmails')
 CodeAssignmentNudgeEmailTemplates = get_model('offer', 'CodeAssignmentNudgeEmailTemplates')
 Product = get_model('catalogue', 'Product')
@@ -82,9 +86,14 @@ OFFER_ASSIGNMENT_SUMMARY_LINK = reverse('api:v2:enterprise-offer-assignment-summ
 TEMPLATE_SUBJECT = 'Test Subject '
 TEMPLATE_GREETING = 'hello there '
 TEMPLATE_CLOSING = ' kind regards'
-TEMPLATE_FILES_WITH_URL = [{'name': 'abc.png', 'size': 123, 'url': 'www.example.com/abc-png'},
-                           {'name': 'def.png', 'size': 456, 'contents': 'dummy-content'}]
+TEMPLATE_FILES_MIXED = [{'name': 'abc.png', 'size': 123, 'url': 'https://www.example.com/abc-png'},
+                        {'name': 'def.png', 'size': 456, 'contents': 'dummy-content'}]
+TEMPLATE_FILES_WITH_CONTENTS = [{'name': 'abc.png', 'size': 123, 'contents': 'dummy-contents'},
+                                {'name': 'def.png', 'size': 456, 'contents': 'dummy-contents'}]
+TEMPLATE_FILES_WITH_URLS = [{'name': 'abc.png', 'size': 123, 'url': 'https://www.example.com'},
+                            {'name': 'def.png', 'size': 456, 'url': 'https://www.example.com'}]
 UPLOAD_FILES_TO_S3_PATH = 'ecommerce.extensions.api.v2.views.enterprise.upload_files_for_enterprise_coupons'
+DELETE_FILE_FROM_S3_PATH = 'ecommerce.extensions.offer.models.delete_files_from_s3'
 
 
 class TestEnterpriseCustomerView(EnterpriseServiceMockMixin, TestCase):
@@ -581,7 +590,7 @@ class EnterpriseCouponViewSetRbacTests(
 
             with mock.patch(UPLOAD_FILES_TO_S3_PATH) as mock_file_uploader:
                 mock_file_uploader.return_value = [
-                    {'name': 'def.png', 'size': 456, 'url': 'www.example.com/def-png'}
+                    {'name': 'def.png', 'size': 456, 'url': 'https://www.example.com/def-png'}
                 ]
                 self.get_response(
                     'POST',
@@ -593,7 +602,7 @@ class EnterpriseCouponViewSetRbacTests(
                         'template_subject': TEMPLATE_SUBJECT,
                         'template_greeting': TEMPLATE_GREETING,
                         'template_closing': TEMPLATE_CLOSING,
-                        'template_files': TEMPLATE_FILES_WITH_URL,
+                        'template_files': TEMPLATE_FILES_MIXED,
                     }
                 )
                 mock_file_uploader.assert_called_once_with(
@@ -654,7 +663,7 @@ class EnterpriseCouponViewSetRbacTests(
         with mock.patch('ecommerce.extensions.offer.utils.send_offer_assignment_email.delay'):
             with mock.patch(UPLOAD_FILES_TO_S3_PATH) as mock_file_uploader:
                 mock_file_uploader.return_value = [
-                    {'name': 'def.png', 'size': 456, 'url': 'www.example.com/def-png'}
+                    {'name': 'def.png', 'size': 456, 'url': 'https://www.example.com/def-png'}
                 ]
                 self.get_response(
                     'POST',
@@ -664,7 +673,7 @@ class EnterpriseCouponViewSetRbacTests(
                         'template_subject': TEMPLATE_SUBJECT,
                         'template_greeting': TEMPLATE_GREETING,
                         'template_closing': TEMPLATE_CLOSING,
-                        'template_files': TEMPLATE_FILES_WITH_URL,
+                        'template_files': TEMPLATE_FILES_MIXED,
                         'users': users,
                         'codes': codes
                     }
@@ -834,7 +843,7 @@ class EnterpriseCouponViewSetRbacTests(
             codes = [voucher.code for voucher in vouchers]
             with mock.patch(UPLOAD_FILES_TO_S3_PATH) as mock_file_uploader:
                 mock_file_uploader.return_value = [
-                    {'name': 'def.png', 'size': 456, 'url': 'www.example.com/def-png'}
+                    {'name': 'def.png', 'size': 456, 'url': 'https://www.example.com/def-png'}
                 ]
                 response = self.get_response(
                     'POST',
@@ -844,7 +853,7 @@ class EnterpriseCouponViewSetRbacTests(
                         'template_subject': TEMPLATE_SUBJECT,
                         'template_greeting': TEMPLATE_GREETING,
                         'template_closing': TEMPLATE_CLOSING,
-                        'template_files': TEMPLATE_FILES_WITH_URL,
+                        'template_files': TEMPLATE_FILES_MIXED,
                         'users': [{'email': 'user1@example.com'}],
                         'codes': codes,
                         'base_enterprise_url': 'https://bears.party'
@@ -1898,7 +1907,7 @@ class EnterpriseCouponViewSetRbacTests(
         with mock.patch('ecommerce.extensions.offer.utils.send_offer_assignment_email.delay') as mock_send_email:
             with mock.patch(UPLOAD_FILES_TO_S3_PATH) as mock_file_uploader:
                 mock_file_uploader.return_value = [
-                    {'name': 'def.png', 'size': 456, 'url': 'www.example.com/def-png'}
+                    {'name': 'def.png', 'size': 456, 'url': 'https://www.example.com/def-png'}
                 ]
                 response = self.get_response(
                     'POST',
@@ -1908,7 +1917,7 @@ class EnterpriseCouponViewSetRbacTests(
                         'template_subject': TEMPLATE_SUBJECT,
                         'template_greeting': TEMPLATE_GREETING,
                         'template_closing': TEMPLATE_CLOSING,
-                        'template_files': TEMPLATE_FILES_WITH_URL,
+                        'template_files': TEMPLATE_FILES_MIXED,
                         'users': users,
                         'enable_nudge_emails': enable_nudge_emails
                     }
@@ -1952,7 +1961,7 @@ class EnterpriseCouponViewSetRbacTests(
         with mock.patch('ecommerce.extensions.offer.utils.send_offer_assignment_email.delay') as mock_send_email:
             with mock.patch(UPLOAD_FILES_TO_S3_PATH) as mock_file_uploader:
                 mock_file_uploader.return_value = [
-                    {'name': 'def.png', 'size': 456, 'url': 'www.example.com/def-png'}
+                    {'name': 'def.png', 'size': 456, 'url': 'https://www.example.com/def-png'}
                 ]
                 response = self.get_response(
                     'POST',
@@ -1962,7 +1971,7 @@ class EnterpriseCouponViewSetRbacTests(
                         'template_subject': TEMPLATE_SUBJECT,
                         'template_greeting': TEMPLATE_GREETING,
                         'template_closing': TEMPLATE_CLOSING,
-                        'template_files': TEMPLATE_FILES_WITH_URL,
+                        'template_files': TEMPLATE_FILES_MIXED,
                         'users': users,
                         'codes': codes_param
                     }
@@ -1998,7 +2007,7 @@ class EnterpriseCouponViewSetRbacTests(
         with mock.patch('ecommerce.extensions.offer.utils.send_offer_assignment_email.delay') as mock_send_email:
             with mock.patch(UPLOAD_FILES_TO_S3_PATH) as mock_file_uploader:
                 mock_file_uploader.return_value = [
-                    {'name': 'def.png', 'size': 456, 'url': 'www.example.com/def-png'}
+                    {'name': 'def.png', 'size': 456, 'url': 'https://www.example.com/def-png'}
                 ]
                 response = self.get_response(
                     'POST',
@@ -2008,7 +2017,7 @@ class EnterpriseCouponViewSetRbacTests(
                         'template_subject': TEMPLATE_SUBJECT,
                         'template_greeting': TEMPLATE_GREETING,
                         'template_closing': TEMPLATE_CLOSING,
-                        'template_files': TEMPLATE_FILES_WITH_URL,
+                        'template_files': TEMPLATE_FILES_MIXED,
                         'users': users
                     }
                 )
@@ -2077,7 +2086,7 @@ class EnterpriseCouponViewSetRbacTests(
         with mock.patch('ecommerce.extensions.offer.utils.send_offer_assignment_email.delay') as mock_send_email:
             with mock.patch(UPLOAD_FILES_TO_S3_PATH) as mock_file_uploader:
                 mock_file_uploader.return_value = [
-                    {'name': 'def.png', 'size': 456, 'url': 'www.example.com/def-png'}
+                    {'name': 'def.png', 'size': 456, 'url': 'https://www.example.com/def-png'}
                 ]
                 response = self.get_response(
                     'POST',
@@ -2087,7 +2096,7 @@ class EnterpriseCouponViewSetRbacTests(
                         'template_subject': TEMPLATE_SUBJECT,
                         'template_greeting': TEMPLATE_GREETING,
                         'template_closing': TEMPLATE_CLOSING,
-                        'template_files': TEMPLATE_FILES_WITH_URL,
+                        'template_files': TEMPLATE_FILES_MIXED,
                         'users': users
                     }
                 )
@@ -2116,7 +2125,7 @@ class EnterpriseCouponViewSetRbacTests(
         with mock.patch('ecommerce.extensions.offer.utils.send_offer_assignment_email.delay') as mock_send_email:
             with mock.patch(UPLOAD_FILES_TO_S3_PATH) as mock_file_uploader:
                 mock_file_uploader.return_value = [
-                    {'name': 'def.png', 'size': 456, 'url': 'www.example.com/def-png'}
+                    {'name': 'def.png', 'size': 456, 'url': 'https://www.example.com/def-png'}
                 ]
                 response = self.get_response(
                     'POST',
@@ -2126,7 +2135,7 @@ class EnterpriseCouponViewSetRbacTests(
                         'template_subject': TEMPLATE_SUBJECT,
                         'template_greeting': TEMPLATE_GREETING,
                         'template_closing': TEMPLATE_CLOSING,
-                        'template_files': TEMPLATE_FILES_WITH_URL,
+                        'template_files': TEMPLATE_FILES_MIXED,
                         'users': [user]
                     }
                 )
@@ -2153,7 +2162,7 @@ class EnterpriseCouponViewSetRbacTests(
         with mock.patch('ecommerce.extensions.offer.utils.send_offer_assignment_email.delay') as mock_send_email:
             with mock.patch(UPLOAD_FILES_TO_S3_PATH) as mock_file_uploader:
                 mock_file_uploader.return_value = [
-                    {'name': 'def.png', 'size': 456, 'url': 'www.example.com/def-png'}
+                    {'name': 'def.png', 'size': 456, 'url': 'https://www.example.com/def-png'}
                 ]
                 response = self.get_response(
                     'POST',
@@ -2163,7 +2172,7 @@ class EnterpriseCouponViewSetRbacTests(
                         'template_subject': TEMPLATE_SUBJECT,
                         'template_greeting': TEMPLATE_GREETING,
                         'template_closing': TEMPLATE_CLOSING,
-                        'template_files': TEMPLATE_FILES_WITH_URL,
+                        'template_files': TEMPLATE_FILES_MIXED,
                         'users': [user]
                     }
                 )
@@ -2232,7 +2241,7 @@ class EnterpriseCouponViewSetRbacTests(
             with mock.patch(
                     UPLOAD_FILES_TO_S3_PATH) as mock_file_uploader:
                 mock_file_uploader.return_value = [
-                    {'name': 'def.png', 'size': 456, 'url': 'www.example.com/def-png'}
+                    {'name': 'def.png', 'size': 456, 'url': 'https://www.example.com/def-png'}
                 ]
                 response = self.get_response(
                     'POST',
@@ -2242,7 +2251,7 @@ class EnterpriseCouponViewSetRbacTests(
                         'template_subject': TEMPLATE_SUBJECT,
                         'template_greeting': TEMPLATE_GREETING,
                         'template_closing': TEMPLATE_CLOSING,
-                        'template_files': TEMPLATE_FILES_WITH_URL,
+                        'template_files': TEMPLATE_FILES_MIXED,
                         'users': users
                     }
                 )
@@ -2440,7 +2449,7 @@ class EnterpriseCouponViewSetRbacTests(
         with mock.patch('ecommerce.extensions.offer.utils.send_offer_assignment_email.delay'):
             with mock.patch(UPLOAD_FILES_TO_S3_PATH) as mock_file_uploader:
                 mock_file_uploader.return_value = [
-                    {'name': 'def.png', 'size': 456, 'url': 'www.example.com/def-png'}
+                    {'name': 'def.png', 'size': 456, 'url': 'https://www.example.com/def-png'}
                 ]
                 self.get_response(
                     'POST',
@@ -2450,7 +2459,7 @@ class EnterpriseCouponViewSetRbacTests(
                         'template_subject': TEMPLATE_SUBJECT,
                         'template_greeting': TEMPLATE_GREETING,
                         'template_closing': TEMPLATE_CLOSING,
-                        'template_files': TEMPLATE_FILES_WITH_URL,
+                        'template_files': TEMPLATE_FILES_MIXED,
                         'users': [user]
                     }
                 )
@@ -2555,7 +2564,7 @@ class EnterpriseCouponViewSetRbacTests(
                 'template_subject': TEMPLATE_SUBJECT,
                 'template_greeting': TEMPLATE_GREETING,
                 'template_closing': TEMPLATE_CLOSING,
-                'template_files': TEMPLATE_FILES_WITH_URL,
+                'template_files': TEMPLATE_FILES_MIXED,
                 'assignments': {'user': user, 'code': 'RANDOMCODE'},
                 'do_not_email': False
             }
@@ -2684,7 +2693,7 @@ class EnterpriseCouponViewSetRbacTests(
             with mock.patch(
                     UPLOAD_FILES_TO_S3_PATH) as mock_file_uploader:
                 mock_file_uploader.return_value = [
-                    {'name': 'def.png', 'size': 456, 'url': 'www.example.com/def-png'}
+                    {'name': 'def.png', 'size': 456, 'url': 'https://www.example.com/def-png'}
                 ]
 
                 self.get_response(
@@ -2695,7 +2704,7 @@ class EnterpriseCouponViewSetRbacTests(
                         'template_subject': TEMPLATE_SUBJECT,
                         'template_greeting': TEMPLATE_GREETING,
                         'template_closing': TEMPLATE_CLOSING,
-                        'template_files': TEMPLATE_FILES_WITH_URL,
+                        'template_files': TEMPLATE_FILES_MIXED,
                         'users': users
                     }
                 )
@@ -2707,7 +2716,7 @@ class EnterpriseCouponViewSetRbacTests(
             with mock.patch(
                     UPLOAD_FILES_TO_S3_PATH) as mock_file_uploader:
                 mock_file_uploader.return_value = [
-                    {'name': 'def.png', 'size': 456, 'url': 'www.example.com/def-png'}
+                    {'name': 'def.png', 'size': 456, 'url': 'https://www.example.com/def-png'}
                 ]
                 response = self.get_response(
                     'POST',
@@ -2717,7 +2726,7 @@ class EnterpriseCouponViewSetRbacTests(
                         'template_subject': TEMPLATE_SUBJECT,
                         'template_greeting': TEMPLATE_GREETING,
                         'template_closing': TEMPLATE_CLOSING,
-                        'template_files': TEMPLATE_FILES_WITH_URL,
+                        'template_files': TEMPLATE_FILES_MIXED,
                         'assignments': [
                             {'user': {'email': offer_assignment.user_email}, 'code': offer_assignment.code},
                             {'user': {'email': 'test3@example.com'}, 'code': 'RANDOMCODE'},
@@ -2765,7 +2774,7 @@ class EnterpriseCouponViewSetRbacTests(
         with mock.patch(
                 UPLOAD_FILES_TO_S3_PATH) as mock_file_uploader:
             mock_file_uploader.return_value = [
-                {'name': 'def.png', 'size': 456, 'url': 'www.example.com/def-png'}
+                {'name': 'def.png', 'size': 456, 'url': 'https://www.example.com/def-png'}
             ]
             self.get_response(
                 'POST',
@@ -2775,7 +2784,7 @@ class EnterpriseCouponViewSetRbacTests(
                     'template_subject': TEMPLATE_SUBJECT,
                     'template_greeting': TEMPLATE_GREETING,
                     'template_closing': TEMPLATE_CLOSING,
-                    'template_files': TEMPLATE_FILES_WITH_URL,
+                    'template_files': TEMPLATE_FILES_MIXED,
                     'users': [user],
                     'notify_learners': False,
                 }
@@ -2808,14 +2817,14 @@ class EnterpriseCouponViewSetRbacTests(
             'template_subject': TEMPLATE_SUBJECT,
             'template_greeting': TEMPLATE_GREETING,
             'template_closing': TEMPLATE_CLOSING,
-            'template_files': TEMPLATE_FILES_WITH_URL,
+            'template_files': TEMPLATE_FILES_MIXED,
             'users': [user],
         }
 
         with mock.patch(
                 UPLOAD_FILES_TO_S3_PATH) as mock_file_uploader:
             mock_file_uploader.return_value = [
-                {'name': 'def.png', 'size': 456, 'url': 'www.example.com/def-png'}
+                {'name': 'def.png', 'size': 456, 'url': 'https://www.example.com/def-png'}
             ]
             self.get_response(
                 'POST',
@@ -2847,7 +2856,7 @@ class EnterpriseCouponViewSetRbacTests(
             with mock.patch(
                     UPLOAD_FILES_TO_S3_PATH) as mock_file_uploader:
                 mock_file_uploader.return_value = [
-                    {'name': 'def.png', 'size': 456, 'url': 'www.example.com/def-png'}
+                    {'name': 'def.png', 'size': 456, 'url': 'https://www.example.com/def-png'}
                 ]
 
                 self.get_response(
@@ -2858,7 +2867,7 @@ class EnterpriseCouponViewSetRbacTests(
                         'template_subject': TEMPLATE_SUBJECT,
                         'template_greeting': TEMPLATE_GREETING,
                         'template_closing': TEMPLATE_CLOSING,
-                        'template_files': TEMPLATE_FILES_WITH_URL,
+                        'template_files': TEMPLATE_FILES_MIXED,
                         'users': [user]
                     }
                 )
@@ -2990,7 +2999,7 @@ class EnterpriseCouponViewSetRbacTests(
             with mock.patch(
                     UPLOAD_FILES_TO_S3_PATH) as mock_file_uploader:
                 mock_file_uploader.return_value = [
-                    {'name': 'def.png', 'size': 456, 'url': 'www.example.com/def-png'}
+                    {'name': 'def.png', 'size': 456, 'url': 'https://www.example.com/def-png'}
                 ]
                 self.get_response(
                     'POST',
@@ -3000,7 +3009,7 @@ class EnterpriseCouponViewSetRbacTests(
                         'template_subject': TEMPLATE_SUBJECT,
                         'template_greeting': TEMPLATE_GREETING,
                         'template_closing': TEMPLATE_CLOSING,
-                        'template_files': TEMPLATE_FILES_WITH_URL,
+                        'template_files': TEMPLATE_FILES_MIXED,
                         'users': users
                     }
                 )
@@ -3012,7 +3021,7 @@ class EnterpriseCouponViewSetRbacTests(
             with mock.patch(
                     UPLOAD_FILES_TO_S3_PATH) as mock_file_uploader:
                 mock_file_uploader.return_value = [
-                    {'name': 'def.png', 'size': 456, 'url': 'www.example.com/def-png'}
+                    {'name': 'def.png', 'size': 456, 'url': 'https://www.example.com/def-png'}
                 ]
                 response = self.get_response(
                     'POST',
@@ -3022,7 +3031,7 @@ class EnterpriseCouponViewSetRbacTests(
                         'template_subject': TEMPLATE_SUBJECT,
                         'template_greeting': TEMPLATE_GREETING,
                         'template_closing': TEMPLATE_CLOSING,
-                        'template_files': TEMPLATE_FILES_WITH_URL,
+                        'template_files': TEMPLATE_FILES_MIXED,
                         'assignments': [
                             {'user': {'email': offer_assignment.user_email}, 'code': offer_assignment.code},
                             {'user': {'email': 'test3@example.com'}, 'code': 'RANDOMCODE'},
@@ -3064,7 +3073,7 @@ class EnterpriseCouponViewSetRbacTests(
             with mock.patch(
                     UPLOAD_FILES_TO_S3_PATH) as mock_file_uploader:
                 mock_file_uploader.return_value = [
-                    {'name': 'def.png', 'size': 456, 'url': 'www.example.com/def-png'}
+                    {'name': 'def.png', 'size': 456, 'url': 'https://www.example.com/def-png'}
                 ]
                 response = self.get_response(
                     'POST',
@@ -3074,7 +3083,7 @@ class EnterpriseCouponViewSetRbacTests(
                         'template_subject': TEMPLATE_SUBJECT,
                         'template_greeting': TEMPLATE_GREETING,
                         'template_closing': TEMPLATE_CLOSING,
-                        'template_files': TEMPLATE_FILES_WITH_URL,
+                        'template_files': TEMPLATE_FILES_MIXED,
                         'code_filter': VOUCHER_NOT_REDEEMED
                     }
                 )
@@ -3118,7 +3127,7 @@ class EnterpriseCouponViewSetRbacTests(
             with mock.patch(
                     UPLOAD_FILES_TO_S3_PATH) as mock_file_uploader:
                 mock_file_uploader.return_value = [
-                    {'name': 'def.png', 'size': 456, 'url': 'www.example.com/def-png'}
+                    {'name': 'def.png', 'size': 456, 'url': 'https://www.example.com/def-png'}
                 ]
                 response = self.get_response(
                     'POST',
@@ -3128,7 +3137,7 @@ class EnterpriseCouponViewSetRbacTests(
                         'template_subject': TEMPLATE_SUBJECT,
                         'template_greeting': TEMPLATE_GREETING,
                         'template_closing': TEMPLATE_CLOSING,
-                        'template_files': TEMPLATE_FILES_WITH_URL,
+                        'template_files': TEMPLATE_FILES_MIXED,
                         'code_filter': VOUCHER_PARTIAL_REDEEMED
                     }
                 )
@@ -3221,7 +3230,7 @@ class EnterpriseCouponViewSetRbacTests(
                 'template_subject': TEMPLATE_SUBJECT,
                 'template_greeting': TEMPLATE_GREETING,
                 'template_closing': TEMPLATE_CLOSING,
-                'template_files': TEMPLATE_FILES_WITH_URL,
+                'template_files': TEMPLATE_FILES_MIXED,
                 'users': [{'email': 'test@edx.org'}]
             }
         )
@@ -3338,7 +3347,7 @@ class EnterpriseCouponViewSetRbacTests(
                 'template_subject': 'S' * (email_subject_max_limit + 1),
                 'template_greeting': 'G' * (max_limit + 1),
                 'template_closing': 'C' * (max_limit + 1),
-                'template_files': TEMPLATE_FILES_WITH_URL,
+                'template_files': TEMPLATE_FILES_MIXED,
                 'users': [{'email': 'test@edx.org'}]
             }
         )
@@ -3356,7 +3365,7 @@ class EnterpriseCouponViewSetRbacTests(
             with mock.patch(
                     UPLOAD_FILES_TO_S3_PATH) as mock_file_uploader:
                 mock_file_uploader.return_value = [
-                    {'name': 'def.png', 'size': 456, 'url': 'www.example.com/def-png'}
+                    {'name': 'def.png', 'size': 456, 'url': 'https://www.example.com/def-png'}
                 ]
                 response = self.get_response(
                     'POST',
@@ -3403,7 +3412,7 @@ class EnterpriseCouponViewSetRbacTests(
             'template_subject': TEMPLATE_SUBJECT,
             'template_greeting': TEMPLATE_GREETING,
             'template_closing': TEMPLATE_CLOSING,
-            'template_files': TEMPLATE_FILES_WITH_URL,
+            'template_files': TEMPLATE_FILES_MIXED,
             'users': [user],
             'codes': [code],
             'assignments': [{'user': user, 'code': code}],
@@ -3448,7 +3457,7 @@ class EnterpriseCouponViewSetRbacTests(
             with mock.patch(
                     UPLOAD_FILES_TO_S3_PATH) as mock_file_uploader:
                 mock_file_uploader.return_value = [
-                    {'name': 'def.png', 'size': 456, 'url': 'www.example.com/def-png'}
+                    {'name': 'def.png', 'size': 456, 'url': 'https://www.example.com/def-png'}
                 ]
                 self.get_response(
                     'POST',
@@ -3458,14 +3467,14 @@ class EnterpriseCouponViewSetRbacTests(
                         'template_subject': TEMPLATE_SUBJECT,
                         'template_greeting': TEMPLATE_GREETING,
                         'template_closing': TEMPLATE_CLOSING,
-                        'template_files': TEMPLATE_FILES_WITH_URL,
+                        'template_files': TEMPLATE_FILES_MIXED,
                         'users': users
                     }
                 )
                 with mock.patch(
                         UPLOAD_FILES_TO_S3_PATH) as mock_file_uploader:
                     mock_file_uploader.return_value = [
-                        {'name': 'def.png', 'size': 456, 'url': 'www.example.com/def-png'}
+                        {'name': 'def.png', 'size': 456, 'url': 'https://www.example.com/def-png'}
                     ]
 
         # verify that records have been created with 'assign' email type equal to the bulk count
@@ -3485,7 +3494,7 @@ class EnterpriseCouponViewSetRbacTests(
             with mock.patch(
                     UPLOAD_FILES_TO_S3_PATH) as mock_file_uploader:
                 mock_file_uploader.return_value = [
-                    {'name': 'def.png', 'size': 456, 'url': 'www.example.com/def-png'}
+                    {'name': 'def.png', 'size': 456, 'url': 'https://www.example.com/def-png'}
                 ]
                 self.get_response(
                     'POST',
@@ -3495,7 +3504,7 @@ class EnterpriseCouponViewSetRbacTests(
                         'template_subject': TEMPLATE_SUBJECT,
                         'template_greeting': TEMPLATE_GREETING,
                         'template_closing': TEMPLATE_CLOSING,
-                        'template_files': TEMPLATE_FILES_WITH_URL,
+                        'template_files': TEMPLATE_FILES_MIXED,
                         'assignments': assignments
                     }
                 )
@@ -3516,7 +3525,7 @@ class EnterpriseCouponViewSetRbacTests(
             with mock.patch(
                     UPLOAD_FILES_TO_S3_PATH) as mock_file_uploader:
                 mock_file_uploader.return_value = [
-                    {'name': 'def.png', 'size': 456, 'url': 'www.example.com/def-png'}
+                    {'name': 'def.png', 'size': 456, 'url': 'https://www.example.com/def-png'}
                 ]
 
                 self.get_response(
@@ -3527,7 +3536,7 @@ class EnterpriseCouponViewSetRbacTests(
                         'template_subject': TEMPLATE_SUBJECT,
                         'template_greeting': TEMPLATE_GREETING,
                         'template_closing': TEMPLATE_CLOSING,
-                        'template_files': TEMPLATE_FILES_WITH_URL,
+                        'template_files': TEMPLATE_FILES_MIXED,
                         'assignments': assignments,
                         'do_not_email': False
                     }
@@ -3647,7 +3656,7 @@ class OfferAssignmentSummaryViewSetTests(
             with mock.patch(
                     UPLOAD_FILES_TO_S3_PATH) as mock_file_uploader:
                 mock_file_uploader.return_value = [
-                    {'name': 'def.png', 'size': 456, 'url': 'www.example.com/def-png'}
+                    {'name': 'def.png', 'size': 456, 'url': 'https://www.example.com/def-png'}
                 ]
                 self.get_response(
                     'POST',
@@ -3657,7 +3666,7 @@ class OfferAssignmentSummaryViewSetTests(
                         'template_subject': TEMPLATE_SUBJECT,
                         'template_greeting': TEMPLATE_GREETING,
                         'template_closing': TEMPLATE_CLOSING,
-                        'template_files': TEMPLATE_FILES_WITH_URL,
+                        'template_files': TEMPLATE_FILES_MIXED,
                         'users': users,
                         'codes': codes
                     }
@@ -3919,12 +3928,14 @@ class OfferAssignmentEmailTemplatesViewSetTests(JwtMixin, TestCase):
         )
 
     def create_template_data(
-            self, email_type, name, greeting=None, closing=None, subject=None, status_code=None, method='POST', url=None
+            self, email_type, name, greeting=None, closing=None, subject=None,
+            files=None, status_code=None, method='POST', url=None
     ):
         status_code = status_code or status.HTTP_201_CREATED
         api_endpoint = url or self.url
-
-        data = {'email_type': email_type, 'name': name}
+        if not files:
+            files = []
+        data = {'email_type': email_type, 'name': name, 'email_files': files}
         if greeting:
             data['email_greeting'] = greeting
         if closing:
@@ -3932,11 +3943,17 @@ class OfferAssignmentEmailTemplatesViewSetTests(JwtMixin, TestCase):
         if subject:
             data['email_subject'] = subject
 
-        if method == 'POST':
-            response = self.client.post(api_endpoint, json.dumps(data), 'application/json')
-        elif method == 'PUT':
-            response = self.client.put(api_endpoint, json.dumps(data), 'application/json')
-
+        with mock.patch(UPLOAD_FILES_TO_S3_PATH) as mock_file_uploader:
+            mock_file_uploader.return_value = [{'name': file['name'], 'size': file['size'],
+                                                'url': 'https://www.example.com'}
+                                               for file in files if 'contents' in file]
+            if method == 'POST':
+                response = self.client.post(api_endpoint, json.dumps(data), 'application/json')
+            elif method == 'PUT':
+                post_delete.disconnect(delete_files_from_s3, TemplateFileAttachment)
+                with mock.patch(DELETE_FILE_FROM_S3_PATH, autospec=True) as post_del_signal:
+                    post_delete.connect(post_del_signal, sender=TemplateFileAttachment)
+                    response = self.client.put(api_endpoint, json.dumps(data), 'application/json')
         assert response.status_code == status_code
 
         return response.json()
@@ -3947,14 +3964,16 @@ class OfferAssignmentEmailTemplatesViewSetTests(JwtMixin, TestCase):
         greetings = ['GREETING 1', 'GREETING 2', 'GREETING 3', 'GREETING 4', 'GREETING 5', 'GREETING 6']
         closings = ['CLOSING 1', 'CLOSING 2', 'CLOSING 3', 'CLOSING 4', 'CLOSING 5', 'CLOSING 6']
         subjects = ['SUBJECT 1', 'SUBJECT 2', 'SUBJECT 3', 'SUBJECT 4', 'SUBJECT 5', 'SUBJECT 6']
+        files = TEMPLATE_FILES_WITH_CONTENTS
 
         # create multiple templates of each email type for an enterprise
         for email_type, template_name, email_greeting, email_closing, email_subject in zip(
                 types, names, greetings, closings, subjects
         ):
-            self.create_template_data(email_type, template_name, email_greeting, email_closing, email_subject)
+            self.create_template_data(email_type, template_name, email_greeting, email_closing, email_subject, files)
 
-    def verify_template_data(self, template, email_type, email_greeting, email_closing, email_subject, active, name):
+    def verify_template_data(self, template, email_type, email_greeting, email_closing, email_subject, email_files,
+                             active, name):
         assert template['enterprise_customer'] == self.enterprise
         assert template['email_type'] == email_type
         assert template['name'] == name
@@ -3962,6 +3981,10 @@ class OfferAssignmentEmailTemplatesViewSetTests(JwtMixin, TestCase):
         assert template['email_greeting'] == email_greeting
         assert template['email_closing'] == email_closing
         assert template['email_subject'] == email_subject
+        for index, file in enumerate(email_files):
+            assert file['name'] in template['email_files'][index]['name']
+            assert template['email_files'][index]['url'] == file['url']
+            assert template['email_files'][index]['size'] == file['size']
         assert template['active'] == active
 
     def test_return_all_templates_for_enterprise(self):
@@ -3975,6 +3998,7 @@ class OfferAssignmentEmailTemplatesViewSetTests(JwtMixin, TestCase):
                 'email_greeting': 'GREETING 2',
                 'email_closing': 'CLOSING 2',
                 'email_subject': 'SUBJECT 2',
+                'email_files': TEMPLATE_FILES_WITH_URLS,
                 'active': True
             },
             {
@@ -3983,6 +4007,7 @@ class OfferAssignmentEmailTemplatesViewSetTests(JwtMixin, TestCase):
                 'email_greeting': 'GREETING 4',
                 'email_closing': 'CLOSING 4',
                 'email_subject': 'SUBJECT 4',
+                'email_files': TEMPLATE_FILES_WITH_URLS,
                 'active': True
             },
             {
@@ -3991,6 +4016,7 @@ class OfferAssignmentEmailTemplatesViewSetTests(JwtMixin, TestCase):
                 'email_greeting': 'GREETING 6',
                 'email_closing': 'CLOSING 6',
                 'email_subject': 'SUBJECT 6',
+                'email_files': TEMPLATE_FILES_WITH_URLS,
                 'active': True
             },
             {
@@ -3999,6 +4025,7 @@ class OfferAssignmentEmailTemplatesViewSetTests(JwtMixin, TestCase):
                 'email_greeting': 'GREETING 1',
                 'email_closing': 'CLOSING 1',
                 'email_subject': 'SUBJECT 1',
+                'email_files': TEMPLATE_FILES_WITH_URLS,
                 'active': False
             },
             {
@@ -4007,6 +4034,7 @@ class OfferAssignmentEmailTemplatesViewSetTests(JwtMixin, TestCase):
                 'email_greeting': 'GREETING 3',
                 'email_closing': 'CLOSING 3',
                 'email_subject': 'SUBJECT 3',
+                'email_files': TEMPLATE_FILES_WITH_URLS,
                 'active': False
             },
             {
@@ -4015,6 +4043,7 @@ class OfferAssignmentEmailTemplatesViewSetTests(JwtMixin, TestCase):
                 'email_greeting': 'GREETING 5',
                 'email_closing': 'CLOSING 5',
                 'email_subject': 'SUBJECT 5',
+                'email_files': TEMPLATE_FILES_WITH_URLS,
                 'active': False
             },
         ]
@@ -4035,6 +4064,7 @@ class OfferAssignmentEmailTemplatesViewSetTests(JwtMixin, TestCase):
                 expected_template['email_greeting'],
                 expected_template['email_closing'],
                 expected_template['email_subject'],
+                expected_template['email_files'],
                 expected_template['active'],
                 expected_template['name'],
             )
@@ -4047,6 +4077,7 @@ class OfferAssignmentEmailTemplatesViewSetTests(JwtMixin, TestCase):
                 'email_greeting': 'GREETING 2',
                 'email_closing': 'CLOSING 2',
                 'email_subject': 'SUBJECT 2',
+                'email_files': TEMPLATE_FILES_WITH_URLS,
                 'active': True
             },
             {
@@ -4055,6 +4086,7 @@ class OfferAssignmentEmailTemplatesViewSetTests(JwtMixin, TestCase):
                 'email_greeting': 'GREETING 1',
                 'email_closing': 'CLOSING 1',
                 'email_subject': 'SUBJECT 1',
+                'email_files': TEMPLATE_FILES_WITH_URLS,
                 'active': False
             },
         ],
@@ -4065,6 +4097,7 @@ class OfferAssignmentEmailTemplatesViewSetTests(JwtMixin, TestCase):
                 'email_greeting': 'GREETING 4',
                 'email_closing': 'CLOSING 4',
                 'email_subject': 'SUBJECT 4',
+                'email_files': TEMPLATE_FILES_WITH_URLS,
                 'active': True
             },
             {
@@ -4073,6 +4106,7 @@ class OfferAssignmentEmailTemplatesViewSetTests(JwtMixin, TestCase):
                 'email_greeting': 'GREETING 3',
                 'email_closing': 'CLOSING 3',
                 'email_subject': 'SUBJECT 3',
+                'email_files': TEMPLATE_FILES_WITH_URLS,
                 'active': False
             },
         ],
@@ -4083,6 +4117,7 @@ class OfferAssignmentEmailTemplatesViewSetTests(JwtMixin, TestCase):
                 'email_greeting': 'GREETING 6',
                 'email_closing': 'CLOSING 6',
                 'email_subject': 'SUBJECT 6',
+                'email_files': TEMPLATE_FILES_WITH_URLS,
                 'active': True
             },
             {
@@ -4091,6 +4126,7 @@ class OfferAssignmentEmailTemplatesViewSetTests(JwtMixin, TestCase):
                 'email_greeting': 'GREETING 5',
                 'email_closing': 'CLOSING 5',
                 'email_subject': 'SUBJECT 5',
+                'email_files': TEMPLATE_FILES_WITH_URLS,
                 'active': False
             },
         ],
@@ -4114,6 +4150,7 @@ class OfferAssignmentEmailTemplatesViewSetTests(JwtMixin, TestCase):
                 expected_template['email_greeting'],
                 expected_template['email_closing'],
                 expected_template['email_subject'],
+                expected_template['email_files'],
                 expected_template['active'],
                 expected_template['name'],
             )
@@ -4158,7 +4195,7 @@ class OfferAssignmentEmailTemplatesViewSetTests(JwtMixin, TestCase):
         assert len(templates) == 1
         self.verify_template_data(
             templates[0], email_type, expected_email_greeting, expected_email_closing, expected_email_subject,
-            True, expected_template_name
+            TEMPLATE_FILES_WITH_URLS, True, expected_template_name
         )
 
     def test_retrieve_template_for_enterprise(self):
@@ -4171,14 +4208,16 @@ class OfferAssignmentEmailTemplatesViewSetTests(JwtMixin, TestCase):
         email_closing = 'closing'
         email_subject = 'subject'
 
-        created_template = self.create_template_data(email_type, name, email_greeting, email_closing, email_subject)
+        created_template = self.create_template_data(email_type, name, email_greeting, email_closing, email_subject,
+                                                     TEMPLATE_FILES_WITH_CONTENTS)
 
         response = self.client.get('{}{}/'.format(self.url, created_template['id']))
         assert response.status_code == status.HTTP_200_OK
 
         received_template = response.json()
         self.verify_template_data(
-            received_template, email_type, email_greeting, email_closing, email_subject, True, name
+            received_template, email_type, email_greeting, email_closing, email_subject, TEMPLATE_FILES_WITH_URLS,
+            True, name
         )
 
     @ddt.data(
@@ -4198,12 +4237,14 @@ class OfferAssignmentEmailTemplatesViewSetTests(JwtMixin, TestCase):
             email_greeting = 'GREETING {}'.format(uuid4().hex.upper()[0:6])
             email_closing = 'CLOSING {}'.format(uuid4().hex.upper()[0:6])
             email_subject = 'SUBJECT {}'.format(uuid4().hex.upper()[0:6])
+            email_files = TEMPLATE_FILES_WITH_CONTENTS
 
             template = self.create_template_data(
-                email_type, template_name, email_greeting, email_closing, email_subject
+                email_type, template_name, email_greeting, email_closing, email_subject, email_files
             )
             self.verify_template_data(
-                template, email_type, email_greeting, email_closing, email_subject, True, template_name
+                template, email_type, email_greeting, email_closing, email_subject, TEMPLATE_FILES_WITH_URLS,
+                True, template_name
             )
 
             templates.append(template)
@@ -4235,10 +4276,12 @@ class OfferAssignmentEmailTemplatesViewSetTests(JwtMixin, TestCase):
         email_greeting = ''
         email_closing = ''
         email_subject = ''
+        email_files = []
 
-        template = self.create_template_data(email_type, template_name, email_greeting, email_closing, email_subject)
+        template = self.create_template_data(email_type, template_name, email_greeting, email_closing, email_subject,
+                                             email_files)
         self.verify_template_data(
-            template, email_type, email_greeting, email_closing, email_subject, True, template_name
+            template, email_type, email_greeting, email_closing, email_subject, email_files, True, template_name
         )
 
     @ddt.data('assign', 'remind', 'revoke')
@@ -4248,7 +4291,7 @@ class OfferAssignmentEmailTemplatesViewSetTests(JwtMixin, TestCase):
         """
         template_name = 'E Learning'
         template = self.create_template_data(email_type, template_name, None, None, None)
-        self.verify_template_data(template, email_type, '', '', '', True, template_name)
+        self.verify_template_data(template, email_type, '', '', '', [], True, template_name)
 
     @ddt.data('assign', 'remind', 'revoke')
     def test_post_with_max_length_field_validation(self, email_type):
@@ -4262,7 +4305,7 @@ class OfferAssignmentEmailTemplatesViewSetTests(JwtMixin, TestCase):
         email_subject = 'C' * (OFFER_ASSIGNMENT_EMAIL_SUBJECT_LIMIT + 1)
 
         response = self.create_template_data(
-            email_type, template_name, email_greeting, email_closing, email_subject, status.HTTP_400_BAD_REQUEST
+            email_type, template_name, email_greeting, email_closing, email_subject, [], status.HTTP_400_BAD_REQUEST
         )
         assert response == {
             'email_greeting': [
@@ -4276,18 +4319,30 @@ class OfferAssignmentEmailTemplatesViewSetTests(JwtMixin, TestCase):
             ]
         }
 
+        files_exceeding_size = [{'name': file['name'], 'size': file['size'] + MAX_FILES_SIZE_FOR_COUPONS + 1,
+                                 'contents': file['contents']}
+                                for file in TEMPLATE_FILES_WITH_CONTENTS]
+
+        response = self.create_template_data(
+            email_type, '', '', '', '', files_exceeding_size, status.HTTP_400_BAD_REQUEST
+        )
+        assert response == ['total files size exceeds limit.']
+
     @ddt.data('assign', 'remind', 'revoke')
     def test_delete(self, email_type):
         """
         Verify that view correctly performs HTTP DELETE.
         """
-        create_response = self.create_template_data(email_type, 'A NAME', 'A GREETING', 'A CLOSING', 'A SUBJECT')
-        self.verify_template_data(create_response, email_type, 'A GREETING', 'A CLOSING', 'A SUBJECT', True, 'A NAME')
-
+        create_response = self.create_template_data(email_type, 'A NAME', 'A GREETING', 'A CLOSING', 'A SUBJECT',
+                                                    TEMPLATE_FILES_WITH_CONTENTS)
+        self.verify_template_data(create_response, email_type, 'A GREETING', 'A CLOSING', 'A SUBJECT',
+                                  TEMPLATE_FILES_WITH_URLS, True, 'A NAME')
         api_delete_url = '{}{}/'.format(self.url, create_response['id'])
-        delete_response = self.client.delete(api_delete_url)
+        post_delete.disconnect(delete_files_from_s3, TemplateFileAttachment)
+        with mock.patch(DELETE_FILE_FROM_S3_PATH, autospec=True) as post_del_signal:
+            post_delete.connect(post_del_signal, sender=TemplateFileAttachment)
+            delete_response = self.client.delete(api_delete_url)
         self.assertEqual(delete_response.status_code, 204)
-
         with self.assertRaises(OfferAssignmentEmailTemplates.DoesNotExist):
             OfferAssignmentEmailTemplates.objects.get(id=create_response['id'])
 
@@ -4297,7 +4352,7 @@ class OfferAssignmentEmailTemplatesViewSetTests(JwtMixin, TestCase):
         Verify that view correctly performs HTTP PUT.
         """
         post_response = self.create_template_data(
-            email_type, 'Great template', 'GREETING 100', 'CLOSING 100', 'SUBJECT 100'
+            email_type, 'Great template', 'GREETING 100', 'CLOSING 100', 'SUBJECT 100', TEMPLATE_FILES_WITH_CONTENTS
         )
 
         # prepare http put url and data
@@ -4306,19 +4361,22 @@ class OfferAssignmentEmailTemplatesViewSetTests(JwtMixin, TestCase):
         updated_greeting = 'I AM A GREETING'
         updated_closing = 'I AM A CLOSING'
         updated_subject = 'I AM A SUBJECT'
-
+        updated_files = [post_response['email_files'][0], *TEMPLATE_FILES_WITH_CONTENTS]
         put_response = self.create_template_data(
             email_type,
             updated_name,
             greeting=updated_greeting,
             closing=updated_closing,
             subject=updated_subject,
+            files=updated_files,
             method='PUT',
             url=api_put_url,
             status_code=status.HTTP_200_OK,
         )
+
         self.verify_template_data(
-            put_response, email_type, updated_greeting, updated_closing, updated_subject, True, updated_name
+            put_response, email_type, updated_greeting, updated_closing, updated_subject,
+            [post_response['email_files'][0], *TEMPLATE_FILES_WITH_URLS], True, updated_name
         )
 
     def test_post_required_fields(self):
