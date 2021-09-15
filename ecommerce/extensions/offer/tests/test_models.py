@@ -1,12 +1,15 @@
 # -*- coding: utf-8 -*-
 
 
+import logging
+from collections import namedtuple
 from uuid import uuid4
 
 import botocore
 import ddt
 import httpretty
 import mock
+from botocore.exceptions import ClientError
 from django.core.exceptions import ValidationError
 from django.db.models.signals import post_delete
 from django.utils.timezone import now
@@ -25,6 +28,8 @@ from ecommerce.extensions.offer.models import delete_files_from_s3
 from ecommerce.extensions.test.factories import CodeAssignmentNudgeEmailTemplatesFactory
 from ecommerce.tests.factories import UserFactory
 from ecommerce.tests.testcases import TestCase
+
+LOGGER = logging.getLogger(__name__)
 
 Catalog = get_model('catalogue', 'Catalog')
 ConditionalOffer = get_model('offer', 'ConditionalOffer')
@@ -732,3 +737,20 @@ class TestTemplateFileAttachment(TestCase):
         template_file = self._create_template_file_attachment('abc.png', 123, 'www.example.com/abc-png', template)
         with mock.patch('botocore.client.BaseClient._make_api_call', new=self.mock_make_api_call):
             delete_files_from_s3(sender=TemplateFileAttachment, instance=template_file, using=None)
+
+
+def mock_make_api_call(self, operation_name, kwarg):
+    orig = botocore.client.BaseClient._make_api_call  # pylint: disable=protected-access
+    if operation_name == 'DeleteObject':  # pylint: disable=no-else-return
+        raise ClientError({'Error': {'Message': 'error while deleting object.'}}, operation_name=operation_name)
+    return orig(self, operation_name, kwarg)
+
+
+def test_post_delete_signal_logs_error(caplog):
+    """ tests whether delete_file_from_s3 logs error on facing exception """
+    FakeInstance = namedtuple('FakeInstnace', ['name'])
+    caplog.set_level(logging.ERROR)
+    with mock.patch('botocore.client.BaseClient._make_api_call', new=mock_make_api_call):
+        delete_files_from_s3(sender=TemplateFileAttachment, instance=FakeInstance(''), using=None)
+    assert '[TemplateFileAttachment] Raised an error while deleting the object' in caplog.text
+    assert 'Message: error while deleting object' in caplog.text
