@@ -4328,6 +4328,29 @@ class OfferAssignmentEmailTemplatesViewSetTests(JwtMixin, TestCase):
         )
         assert response == ['total files size exceeds limit.']
 
+        post_response = self.create_template_data(
+            email_type, 'Great template', 'GREETING 100', 'CLOSING 100', 'SUBJECT 100', TEMPLATE_FILES_WITH_CONTENTS
+        )
+        api_put_url = '{}{}/'.format(self.url, post_response['id'])
+        updated_name = 'Awesome Template'
+        updated_greeting = 'I AM A GREETING'
+        updated_closing = 'I AM A CLOSING'
+        updated_subject = 'I AM A SUBJECT'
+        post_response['email_files'][0]['size'] = MAX_FILES_SIZE_FOR_COUPONS + 1
+        updated_files = [post_response['email_files'][0], *TEMPLATE_FILES_WITH_CONTENTS]
+        put_response = self.create_template_data(
+            email_type,
+            updated_name,
+            greeting=updated_greeting,
+            closing=updated_closing,
+            subject=updated_subject,
+            files=updated_files,
+            method='PUT',
+            url=api_put_url,
+            status_code=status.HTTP_400_BAD_REQUEST,
+        )
+        assert put_response == ['total files size exceeds limit.']
+
     @ddt.data('assign', 'remind', 'revoke')
     def test_delete(self, email_type):
         """

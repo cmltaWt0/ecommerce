@@ -669,6 +669,10 @@ class TemplateFileAttachment(models.Model):
 
 @receiver(post_delete, sender=TemplateFileAttachment)
 def delete_files_from_s3(sender, instance, using, **kwargs):  # pylint: disable=unused-argument
+    delete_file_from_s3_with_key(instance.name)
+
+
+def delete_file_from_s3_with_key(key):
     try:
         bucket_name = settings.AWS_EMAIL_TEMPLATE_BUCKET_NAME
         session = boto3.Session(
@@ -676,13 +680,20 @@ def delete_files_from_s3(sender, instance, using, **kwargs):  # pylint: disable=
             aws_secret_access_key=settings.AWS_EMAIL_TEMPLATE_SECRET_ACCESS_KEY
         )
         s3 = session.client('s3')
-        s3.delete_object(Bucket=bucket_name, Key=instance.name)
+        s3.delete_object(Bucket=bucket_name, Key=key)
     except ClientError as error:
         logger.error(
             '[TemplateFileAttachment] Raised an error while deleting the object  %s,'
             'Message: %s',
-            instance,
+            key,
             error.response['Error']['Message']
+        )
+    except Exception as ex:  # pylint: disable=broad-except
+        logger.error(
+            '[TemplateFileAttachment] Raised an error while deleting the object  %s,'
+            'Message: %s',
+            key,
+            ex
         )
 
 

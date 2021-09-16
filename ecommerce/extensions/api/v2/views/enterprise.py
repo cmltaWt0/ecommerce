@@ -28,6 +28,7 @@ from ecommerce.enterprise.utils import (
     get_enterprise_customer_catalogs,
     get_enterprise_customers
 )
+from ecommerce.extensions.offer.models import delete_file_from_s3_with_key
 from ecommerce.extensions.api.pagination import DatatablesDefaultPagination
 from ecommerce.extensions.api.serializers import (
     CouponCodeAssignmentSerializer,
@@ -784,6 +785,8 @@ class EnterpriseCouponViewSet(CouponViewSet):
             if serializer.is_valid():
                 serializer.save()
                 return Response(serializer.data, status=status.HTTP_200_OK)
+        for file in uploaded_files:
+            delete_file_from_s3_with_key(file['name'])
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
     @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated])
@@ -893,7 +896,8 @@ class EnterpriseCouponViewSet(CouponViewSet):
                     map(lambda assignment: assignment['user']['email'], assignments)
                 )
                 return Response(serializer.data, status=status.HTTP_200_OK)
-
+        for file in uploaded_files:
+            delete_file_from_s3_with_key(file['name'])
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
     @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated])
@@ -965,7 +969,8 @@ class EnterpriseCouponViewSet(CouponViewSet):
             if serializer.is_valid():
                 serializer.save()
                 return Response(serializer.data, status=status.HTTP_200_OK)
-
+        for file in uploaded_files:
+            delete_file_from_s3_with_key(file['name'])
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
@@ -1014,7 +1019,7 @@ class OfferAssignmentEmailTemplatesViewSet(PermissionRequiredMixin, ModelViewSet
         total_files_size = 0
         [total_files_size := total_files_size + file['size'] for file in email_files]  # pylint: disable=pointless-statement
         if total_files_size > MAX_FILES_SIZE_FOR_COUPONS:
-            raise serializers.ValidationError('total files size must be less than 2mb')
+            raise serializers.ValidationError('total files size exceeds limit.')
         updated_template_response = super(OfferAssignmentEmailTemplatesViewSet, self).update(request, *args, **kwargs)
         template_id = updated_template_response.data['id']
         email_files_ids = [file['id'] for file in email_files if 'url' in file]
