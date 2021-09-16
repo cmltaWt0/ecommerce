@@ -28,7 +28,6 @@ from ecommerce.enterprise.utils import (
     get_enterprise_customer_catalogs,
     get_enterprise_customers
 )
-from ecommerce.extensions.offer.models import delete_file_from_s3_with_key
 from ecommerce.extensions.api.pagination import DatatablesDefaultPagination
 from ecommerce.extensions.api.serializers import (
     CouponCodeAssignmentSerializer,
@@ -71,6 +70,7 @@ from ecommerce.extensions.offer.constants import (
     VOUCHER_PARTIAL_REDEEMED,
     VOUCHER_REDEEMED
 )
+from ecommerce.extensions.offer.models import delete_file_from_s3_with_key
 from ecommerce.extensions.offer.utils import update_assignments_for_multi_use_per_customer
 from ecommerce.extensions.voucher.utils import (
     create_enterprise_vouchers,

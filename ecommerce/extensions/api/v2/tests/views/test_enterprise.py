@@ -2926,7 +2926,6 @@ class EnterpriseCouponViewSetRbacTests(
         coupon = coupon.json()
         coupon_id = coupon['coupon_id']
         voucher = Product.objects.get(id=coupon_id).attr.coupon_vouchers.vouchers.first()
-        # TODO: do it
         response = self.get_response(
             'POST',
             '/api/v2/enterprise/coupons/{}/remind/'.format(coupon_id),
@@ -3159,7 +3158,6 @@ class EnterpriseCouponViewSetRbacTests(
         coupon = self.get_response('POST', ENTERPRISE_COUPONS_LINK, coupon_post_data)
         coupon = coupon.json()
         coupon_id = coupon['coupon_id']
-        # TODO: do this
         response = self.get_response(
             'POST',
             '/api/v2/enterprise/coupons/{}/remind/'.format(coupon_id),
@@ -3180,8 +3178,6 @@ class EnterpriseCouponViewSetRbacTests(
         coupon = self.get_response('POST', ENTERPRISE_COUPONS_LINK, coupon_post_data)
         coupon = coupon.json()
         coupon_id = coupon['coupon_id']
-
-        # TODO: do it
         response = self.get_response(
             'POST',
             '/api/v2/enterprise/coupons/{}/remind/'.format(coupon_id),
